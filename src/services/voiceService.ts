@@ -1,4 +1,4 @@
-// Voice recognition and Text-To-Speech service
+// Voice recognition and Dual-Engine Text-To-Speech service (GameCaption Style)
 
 export interface VoiceRecognitionHandlers {
   onResult: (text: string, isFinal: boolean) => void;
@@ -9,8 +9,9 @@ export interface VoiceRecognitionHandlers {
 class VoiceManager {
   private recognition: any = null;
   private isListening = false;
-  private synthesisVoice: SpeechSynthesisVoice | null = null;
+  private currentAudio: HTMLAudioElement | null = null;
   private isAudioUnlocked = false;
+  private synthesisVoice: SpeechSynthesisVoice | null = null;
 
   constructor() {
     this.initVoices();
@@ -40,17 +41,29 @@ class VoiceManager {
     }
   }
 
-  // Pre-unlocks audio context on iOS WKWebView upon any touch gesture
+  // Pre-unlocks audio context on iOS Safari / WKWebView on touch
   public unlockAudio() {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (typeof window === 'undefined') return;
     if (this.isAudioUnlocked) return;
 
     try {
-      const dummy = new SpeechSynthesisUtterance('');
-      dummy.volume = 0.01;
-      dummy.rate = 2.0;
-      window.speechSynthesis.speak(dummy);
-      this.isAudioUnlocked = true;
+      // 1. Unlock Web Audio Context / Speech
+      if ('speechSynthesis' in window) {
+        const dummy = new SpeechSynthesisUtterance(' ');
+        dummy.volume = 0.01;
+        dummy.rate = 2.0;
+        window.speechSynthesis.speak(dummy);
+      }
+
+      // 2. Unlock HTML5 Audio
+      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentAudio.play().then(() => {
+        silentAudio.pause();
+        this.isAudioUnlocked = true;
+      }).catch(() => {
+        this.isAudioUnlocked = true;
+      });
+
       this.selectTurkishVoice();
     } catch (e) {
       console.warn('Could not unlock audio:', e);
@@ -153,34 +166,72 @@ class VoiceManager {
     }
   }
 
-  public speak(text: string, speed: number = 1.05, lang: string = 'tr-TR') {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  // Dual-Engine Spoken Subtitles (GameCaption style: Natural Turkish Audio with instant fallback)
+  public async speak(
+    text: string,
+    speed: number = 1.1,
+    voiceType: 'natural' | 'device' = 'natural'
+  ): Promise<void> {
     if (!text || text.trim() === '') return;
+    this.stopSpeaking();
 
+    // 1. PRIMARY ENGINE: Natural Human-Sounding Turkish TTS (bypasses iOS SpeechSynthesis silence bugs)
+    if (voiceType === 'natural') {
+      try {
+        const clean = text.replace(/[*_#`~]/g, '').trim();
+        // Keep under 180 chars per audio chunk for instant playback
+        const snippet = clean.substring(0, 180);
+        const encoded = encodeURIComponent(snippet);
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=tr&client=tw-ob&q=${encoded}`;
+
+        const audio = new Audio(ttsUrl);
+        audio.playbackRate = Math.max(0.85, Math.min(1.6, speed));
+        this.currentAudio = audio;
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          return;
+        }
+      } catch (err) {
+        console.warn('Natural Turkish audio playback error, falling back to Web Speech:', err);
+      }
+    }
+
+    // 2. FALLBACK ENGINE: Apple iOS Native SpeechSynthesis
     try {
-      this.unlockAudio();
-      // Cancel previous speech to stay in real-time sync with in-game scenes
-      window.speechSynthesis.cancel();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        this.unlockAudio();
+        window.speechSynthesis.cancel();
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = Math.max(0.7, Math.min(1.8, speed));
-      utterance.pitch = 1.0;
-      utterance.lang = lang;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = Math.max(0.7, Math.min(1.8, speed));
+        utterance.pitch = 1.0;
+        utterance.lang = 'tr-TR';
 
-      if (!this.synthesisVoice) {
-        this.selectTurkishVoice();
+        if (!this.synthesisVoice) {
+          this.selectTurkishVoice();
+        }
+        if (this.synthesisVoice) {
+          utterance.voice = this.synthesisVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
       }
-      if (this.synthesisVoice) {
-        utterance.voice = this.synthesisVoice;
-      }
-
-      window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.warn('TTS playback error:', e);
+      console.warn('Web Speech fallback error:', e);
     }
   }
 
   public stopSpeaking() {
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+      } catch {}
+      this.currentAudio = null;
+    }
+
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();

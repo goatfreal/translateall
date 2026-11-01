@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Tv,
+  Gamepad2,
   Mic,
   Volume2,
   VolumeX,
@@ -17,12 +18,14 @@ import type { AppSettings, TranslationResult } from '../types';
 
 interface MainMenuProps {
   onStartCamera: () => void;
+  onStartPs5: () => void;
   onStartVoice: () => void;
   onStartScreenShare: () => void;
   openSettings: () => void;
   openHistory: () => void;
   settings: AppSettings;
   onToggleTts: () => void;
+  onToggleVoiceType: () => void;
   historyCount: number;
   lastTranslation?: TranslationResult | null;
   onSpeak: (text: string) => void;
@@ -30,12 +33,14 @@ interface MainMenuProps {
 
 export const MainMenu: React.FC<MainMenuProps> = ({
   onStartCamera,
+  onStartPs5,
   onStartVoice,
   onStartScreenShare,
   openSettings,
   openHistory,
   settings,
   onToggleTts,
+  onToggleVoiceType,
   historyCount,
   lastTranslation,
   onSpeak,
@@ -44,8 +49,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   return (
     <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-4 safe-header safe-bottom animate-in fade-in duration-300">
-      {/* Top Bar: Brand & Quick Settings (Carefully positioned below iPhone notch/clock) */}
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 mb-5">
+      {/* Top Bar: Brand & Quick Settings (Positioned safely below iPhone Dynamic Island & Clock) */}
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
@@ -63,7 +68,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">
-              Konsol & TV Canlı Oyun Çevirisi
+              Konsol & TV Canlı Oyun Çevirisi & Dublajı
             </p>
           </div>
         </div>
@@ -95,108 +100,143 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       </div>
 
-      {/* Hero Quick Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/70 to-teal-950/40 border border-emerald-500/20 p-4 sm:p-5 mb-5 backdrop-blur-md">
+      {/* Hero Quick Banner & Spoken Audio Controls */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-blue-950/40 border border-emerald-500/20 p-4 sm:p-5 mb-4 backdrop-blur-md">
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
               <Sparkles className="w-4 h-4 text-emerald-400" />
-              GameCaption Deneyimi
+              GameCaption Sesli Altyazı Sistemi
             </div>
             <p className="text-xs sm:text-sm text-slate-200 font-medium">
-              Kamerayı ekrandaki altyazı alanına tutun; yeşil kutu içindeki yabancı diyalogları anında Türkçe altyazı ve sesli dublajla dinleyin.
+              Altyazıları yeşil kutuyla algılar, hem ekranda Türkçe gösterir hem de anında sesli dublaj yapar.
             </p>
           </div>
 
-          {/* Direct Dubbing Toggle Button */}
-          <button
-            onClick={onToggleTts}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2.5 transition-all shadow-md cursor-pointer active:scale-95 ${
-              settings.enableTts
-                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
-                : 'bg-slate-800 border-white/10 text-slate-400 hover:bg-slate-700'
-            }`}
-          >
-            {settings.enableTts ? (
-              <>
-                <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>Sesli Dublaj: <strong>AÇIK</strong></span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-slate-400" />
-                <span>Sesli Dublaj: <strong>KAPALI</strong></span>
-              </>
-            )}
-          </button>
+          {/* Audio Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={onToggleVoiceType}
+              className="px-3 py-2 rounded-xl border border-white/15 bg-slate-900 text-xs font-bold text-slate-200 hover:text-white cursor-pointer active:scale-95"
+              title="Ses Motoru"
+            >
+              {settings.voiceType === 'natural' ? '🌟 Doğal Türkçe Ses' : '📱 Cihaz Sesi'}
+            </button>
+
+            <button
+              onClick={onToggleTts}
+              className={`px-4 py-2 rounded-xl border font-black text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer active:scale-95 ${
+                settings.enableTts
+                  ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300'
+                  : 'bg-slate-800 border-white/10 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {settings.enableTts ? (
+                <>
+                  <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <span>Sesli Dublaj: <strong>AÇIK</strong></span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-4 h-4 text-slate-400" />
+                  <span>Sesli Dublaj: <strong>KAPALI</strong></span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main Choice Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-        {/* Card 1: Camera & TV Game Translation (GameCaption style) */}
+      {/* Main Choice Cards: Camera Mode | PS5 Remote Play | Voice */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
+        {/* Card 1: Camera Mode (GameCaption) */}
         <button
           onClick={onStartCamera}
-          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border-2 border-emerald-500/50 hover:border-emerald-400 hover:shadow-2xl hover:shadow-emerald-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
+          className="group relative flex flex-col justify-between p-5 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border-2 border-emerald-500/50 hover:border-emerald-400 hover:shadow-2xl hover:shadow-emerald-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-25 group-hover:scale-110 transition duration-500">
-            <Tv className="w-36 h-36 text-emerald-400" />
-          </div>
-
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition duration-300">
-              <Tv className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-3 group-hover:scale-110 transition duration-300">
+              <Tv className="w-6 h-6" />
             </div>
 
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-emerald-300 transition">
+              <h2 className="text-lg font-black text-white group-hover:text-emerald-300 transition">
                 Kamera Modu
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500 text-slate-950">
-                Önerilen
+              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500 text-slate-950">
+                Popüler
               </span>
             </div>
 
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-              Kamerayı TV/monitöre çevirin. Yeşil kutuyu oyun altyazısına hizalayın; <span className="text-emerald-400 font-bold">canlı Türkçe altyazı ve sesli dublaj</span> alın.
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              Telefonu TV/monitöre çevirin. Yeşil altyazı kutusunu hizalayıp canlı Türkçe dublaj alın.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition">
-            <span className="flex items-center gap-1.5">
-              <Zap className="w-4 h-4" />
+          <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition">
+            <span className="flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5" />
               Kamerayı Başlat
             </span>
             <ArrowRight className="w-4 h-4" />
           </div>
         </button>
 
-        {/* Card 2: Voice Translation */}
+        {/* Card 2: PS5 Remote Play Mode (GameCaption) */}
         <button
-          onClick={onStartVoice}
-          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-white/15 hover:border-teal-400/60 hover:shadow-2xl hover:shadow-teal-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
+          onClick={onStartPs5}
+          className="group relative flex flex-col justify-between p-5 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border-2 border-blue-500/40 hover:border-blue-400 hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition duration-500">
-            <Mic className="w-36 h-36 text-teal-400" />
-          </div>
-
           <div>
-            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-4 group-hover:scale-110 transition duration-300">
-              <Mic className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 mb-3 group-hover:scale-110 transition duration-300">
+              <Gamepad2 className="w-6 h-6" />
             </div>
 
-            <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-teal-300 transition mb-1">
-              Ses & Konuşma Modu
-            </h2>
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-lg font-black text-white group-hover:text-blue-300 transition">
+                PS5 Modu
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-500 text-white">
+                Remote Play
+              </span>
+            </div>
 
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-              Mikrofonu dinler, oyun içi yabancı diyalogları veya sesli sohbetleri anında Türkçe&apos;ye çevirip seslendirir.
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              Kamerasız yerel Wi-Fi akışı. PS5 görüntüsünü doğrudan aktarıp ekrandan çevirir.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-bold text-teal-400 group-hover:translate-x-1 transition">
-            <span className="flex items-center gap-1.5">
-              <Languages className="w-4 h-4" />
+          <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs font-bold text-blue-400 group-hover:translate-x-1 transition">
+            <span className="flex items-center gap-1">
+              <Gamepad2 className="w-3.5 h-3.5" />
+              PS5'e Bağlan
+            </span>
+            <ArrowRight className="w-4 h-4" />
+          </div>
+        </button>
+
+        {/* Card 3: Voice Translation */}
+        <button
+          onClick={onStartVoice}
+          className="group relative flex flex-col justify-between p-5 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-white/15 hover:border-teal-400/60 hover:shadow-2xl hover:shadow-teal-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-3 group-hover:scale-110 transition duration-300">
+              <Mic className="w-6 h-6" />
+            </div>
+
+            <h2 className="text-lg font-black text-white group-hover:text-teal-300 transition mb-1">
+              Ses & Sohbet
+            </h2>
+
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              Mikrofonu dinler, oyun konuşmalarını anında Türkçe&apos;ye çevirip seslendirir.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs font-bold text-teal-400 group-hover:translate-x-1 transition">
+            <span className="flex items-center gap-1">
+              <Languages className="w-3.5 h-3.5" />
               Mikrofonu Başlat
             </span>
             <ArrowRight className="w-4 h-4" />
@@ -206,21 +246,21 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       {/* Screen Share Card (PC / Desktop only) */}
       {isPc && (
-        <div className="mb-5">
+        <div className="mb-4">
           <button
             onClick={onStartScreenShare}
-            className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-900/70 hover:bg-slate-800/90 border border-white/10 hover:border-white/20 transition text-left cursor-pointer active:scale-[0.99]"
+            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/70 hover:bg-slate-800/90 border border-white/10 hover:border-white/20 transition text-left cursor-pointer active:scale-[0.99]"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400">
+              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
                 <Monitor className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <div className="text-xs font-bold text-white flex items-center gap-2">
                   PC Ekran Paylaşımı
-                  <span className="text-[10px] text-slate-400 bg-white/10 px-2 py-0.5 rounded">Masaüstü</span>
+                  <span className="text-[9px] text-slate-400 bg-white/10 px-1.5 py-0.2 rounded">Masaüstü</span>
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-[11px] text-slate-400">
                   Oyun penceresini doğrudan seçin, kameraya gerek kalmadan ekrandan çevirsin.
                 </div>
               </div>
@@ -230,15 +270,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       )}
 
-      {/* Last Translation Quick Card */}
+      {/* Last Translation Quick Card with Speak Button */}
       {lastTranslation && (
-        <div className="rounded-2xl bg-slate-900/80 border border-white/15 p-3.5 mb-5 flex items-center justify-between gap-3 shadow-lg">
+        <div className="rounded-2xl bg-slate-900/80 border border-white/15 p-3 mb-4 flex items-center justify-between gap-3 shadow-lg">
           <div className="min-w-0 flex-1">
             <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1 mb-0.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               Son Çeviri
             </div>
-            <div className="text-xs sm:text-sm font-bold text-white truncate">
+            <div className="text-xs font-bold text-white truncate">
               {lastTranslation.translatedText}
             </div>
             {lastTranslation.originalText && (
@@ -249,19 +289,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
           <button
             onClick={() => onSpeak(lastTranslation.translatedText)}
-            className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition cursor-pointer active:scale-95"
+            className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition cursor-pointer active:scale-95 flex items-center gap-1 text-xs font-bold"
             title="Sesli Dinle"
           >
-            <Volume2 className="w-5 h-5" />
+            <Volume2 className="w-4 h-4" />
+            <span>Dinle</span>
           </button>
         </div>
       )}
 
       {/* Footer System Info */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500 pt-3 border-t border-white/5">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500 pt-2 border-t border-white/5">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>GameCaption UI • NVIDIA NIM Nemotron VL</span>
+          <span>GameCaption v2.5 • PS5 Remote Play & Kamera Çevirisi</span>
         </div>
         <div>
           Hedef Dil: <strong>Türkçe</strong>

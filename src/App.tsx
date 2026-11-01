@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MainMenu } from './components/MainMenu';
 import { CameraView } from './components/CameraView';
+import { Ps5View } from './components/Ps5View';
 import { VoiceView } from './components/VoiceView';
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
@@ -9,8 +10,8 @@ import type { AppSettings, TranslationResult } from './types';
 import { voiceManager } from './services/voiceService';
 import { X, AlertCircle } from 'lucide-react';
 
-const SETTINGS_STORAGE_KEY = 'translateall_settings_v2';
-const HISTORY_STORAGE_KEY = 'translateall_history_v2';
+const SETTINGS_STORAGE_KEY = 'translateall_settings_v3';
+const HISTORY_STORAGE_KEY = 'translateall_history_v3';
 
 export function App() {
   // Load settings from localStorage
@@ -23,6 +24,7 @@ export function App() {
           ...DEFAULT_SETTINGS,
           ...parsed,
           enableTts: parsed.enableTts !== undefined ? parsed.enableTts : true,
+          voiceType: parsed.voiceType || 'natural',
           nvidiaApiKey: parsed.nvidiaApiKey && parsed.nvidiaApiKey.trim() ? parsed.nvidiaApiKey : DEFAULT_SETTINGS.nvidiaApiKey,
         };
       }
@@ -42,8 +44,8 @@ export function App() {
     }
   });
 
-  // App navigation state: 'menu' | 'camera' | 'voice'
-  const [activeTab, setActiveTab] = useState<'menu' | 'camera' | 'voice'>('menu');
+  // App navigation state: 'menu' | 'camera' | 'ps5' | 'voice'
+  const [activeTab, setActiveTab] = useState<'menu' | 'camera' | 'ps5' | 'voice'>('menu');
   const [currentResult, setCurrentResult] = useState<TranslationResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -70,6 +72,19 @@ export function App() {
     voiceManager.unlockAudio();
     setSettings((prev) => {
       const updated = { ...prev, enableTts: !prev.enableTts };
+      try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  // Toggle voice engine helper (Natural Cloud vs Device)
+  const handleToggleVoiceType = useCallback(() => {
+    voiceManager.unlockAudio();
+    setSettings((prev) => {
+      const nextType = prev.voiceType === 'natural' ? 'device' : 'natural';
+      const updated: AppSettings = { ...prev, voiceType: nextType };
       try {
         localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));
       } catch {}
@@ -111,9 +126,9 @@ export function App() {
   const handleSpeak = useCallback(
     (text: string) => {
       voiceManager.unlockAudio();
-      voiceManager.speak(text, settings.ttsVoiceSpeed);
+      voiceManager.speak(text, settings.ttsVoiceSpeed, settings.voiceType);
     },
-    [settings.ttsVoiceSpeed]
+    [settings.ttsVoiceSpeed, settings.voiceType]
   );
 
   // Screen share on PC
@@ -213,6 +228,10 @@ export function App() {
               voiceManager.unlockAudio();
               setActiveTab('camera');
             }}
+            onStartPs5={() => {
+              voiceManager.unlockAudio();
+              setActiveTab('ps5');
+            }}
             onStartVoice={() => {
               voiceManager.unlockAudio();
               setActiveTab('voice');
@@ -222,6 +241,7 @@ export function App() {
             openHistory={() => setIsHistoryOpen(true)}
             settings={settings}
             onToggleTts={handleToggleTts}
+            onToggleVoiceType={handleToggleVoiceType}
             historyCount={history.length}
             lastTranslation={currentResult}
             onSpeak={handleSpeak}
@@ -238,6 +258,22 @@ export function App() {
               onError={showError}
               screenStream={screenStream}
               onClearScreenStream={handleClearScreenStream}
+              onSpeak={handleSpeak}
+              onBackToMenu={() => setActiveTab('menu')}
+              onToggleTts={handleToggleTts}
+              currentResult={currentResult}
+            />
+          </div>
+        )}
+
+        {activeTab === 'ps5' && (
+          <div className="flex-1 flex flex-col w-full h-full p-0 sm:p-4 max-w-6xl mx-auto">
+            <Ps5View
+              settings={settings}
+              onNewTranslation={handleNewTranslation}
+              isTranslating={isTranslating}
+              setIsTranslating={setIsTranslating}
+              onError={showError}
               onSpeak={handleSpeak}
               onBackToMenu={() => setActiveTab('menu')}
               onToggleTts={handleToggleTts}

@@ -274,6 +274,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Voice Engine & Dubbing Speed */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1.5 flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Ses Motoru (GameCaption Tarzı)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, voiceType: 'natural' })}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                    formData.voiceType === 'natural'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🌟 Doğal Ses (Önerilen)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, voiceType: 'device' })}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                    formData.voiceType === 'device'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📱 Cihaz Sesi
+                </button>
+              </div>
+            </div>
 
             <div>
               <label className="text-xs font-bold text-slate-300 block mb-1.5">Ses Hızı (Dublaj)</label>
@@ -288,7 +322,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) =>
                     setFormData({ ...formData, ttsVoiceSpeed: parseFloat(e.target.value) })
                   }
-                  className="flex-1 accent-lime-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer"
                 />
                 <span className="text-xs font-mono text-white w-10 text-right">
                   {formData.ttsVoiceSpeed}x

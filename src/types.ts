@@ -12,7 +12,15 @@ export interface TranslationResult {
   confidence?: number;
 }
 
-export type VideoSourceMode = 'camera' | 'screen' | 'file';
+export type VideoSourceMode = 'camera' | 'screen' | 'ps5' | 'file';
+
+export interface Ps5Config {
+  ip: string;
+  pin: string;
+  resolution: '720p' | '1080p';
+  fps: '30' | '60';
+  isPaired: boolean;
+}
 
 export interface AppSettings {
   nvidiaApiKey: string;
@@ -22,11 +30,12 @@ export interface AppSettings {
   sourceLanguage: string;
   autoIntervalSeconds: number;
   enableTts: boolean;
+  voiceType: 'natural' | 'device';
   ttsVoiceSpeed: number;
-  turboGamingMode: boolean; // Ultra-fast gaming latency mode
+  turboGamingMode: boolean;
   roiEnabled: boolean;
   roiBox: {
-    x: number; // percentage 0-100
+    x: number;
     y: number;
     width: number;
     height: number;
@@ -34,6 +43,8 @@ export interface AppSettings {
   tvMode: boolean;
   highContrastSubtitles: boolean;
   fontSize: 'small' | 'medium' | 'large' | 'huge';
+  subtitleColor: 'yellow' | 'white' | 'green';
+  ps5Config: Ps5Config;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -43,19 +54,28 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetLanguage: 'tr',
   sourceLanguage: 'auto',
   autoIntervalSeconds: 1.5,
-  enableTts: true, // Auto dubbing / voice reading enabled by default for games!
+  enableTts: true, // Auto dubbing / voice reading enabled by default
+  voiceType: 'natural', // High-quality Natural Turkish Audio
   ttsVoiceSpeed: 1.1,
   turboGamingMode: true,
-  roiEnabled: true, // Focused subtitle area for gaming speed
+  roiEnabled: true,
   roiBox: {
-    x: 5,
+    x: 6,
     y: 68,
-    width: 90,
-    height: 28,
+    width: 88,
+    height: 24,
   },
   tvMode: false,
   highContrastSubtitles: true,
   fontSize: 'large',
+  subtitleColor: 'yellow',
+  ps5Config: {
+    ip: '',
+    pin: '',
+    resolution: '1080p',
+    fps: '60',
+    isPaired: false,
+  },
 };
 
 export const AVAILABLE_VISION_MODELS = [
