@@ -43,10 +43,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetLanguage: 'tr',
   sourceLanguage: 'auto',
   autoIntervalSeconds: 1.5,
-  enableTts: false,
+  enableTts: true, // Auto dubbing / voice reading enabled by default for games!
   ttsVoiceSpeed: 1.1,
   turboGamingMode: true,
-  roiEnabled: true, // Default to focused subtitle area for gaming speed
+  roiEnabled: true, // Focused subtitle area for gaming speed
   roiBox: {
     x: 5,
     y: 68,
@@ -78,8 +78,8 @@ export const LANGUAGES = [
   { code: 'es', name: 'Español (İspanyolca)' },
   { code: 'it', name: 'Italiano (İtalyanca)' },
   { code: 'ja', name: '日本語 (Japonca)' },
-  { code: 'ko', name: '한국어 (Korece)' },
   { code: 'ru', name: 'Русский (Rusça)' },
+  { code: 'ko', name: '한국어 (Korece)' },
   { code: 'zh', name: '中文 (Çince)' },
   { code: 'ar', name: 'العربية (Arapça)' },
 ];

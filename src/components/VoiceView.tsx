@@ -6,6 +6,8 @@ import {
   VolumeX,
   Radio,
   Globe,
+  ArrowLeft,
+  Zap,
 } from 'lucide-react';
 import type { AppSettings, TranslationResult } from '../types';
 import { voiceManager } from '../services/voiceService';
@@ -18,6 +20,9 @@ interface VoiceViewProps {
   setIsTranslating: (val: boolean) => void;
   onError: (err: string) => void;
   onSpeak: (text: string) => void;
+  onBackToMenu: () => void;
+  onToggleTts: () => void;
+  currentResult: TranslationResult | null;
 }
 
 export const VoiceView: React.FC<VoiceViewProps> = ({
@@ -27,6 +32,9 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
   setIsTranslating,
   onError,
   onSpeak,
+  onBackToMenu,
+  onToggleTts,
+  currentResult,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [interimText, setInterimText] = useState('');
@@ -38,6 +46,10 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+
+  const handleTouchUnlock = () => {
+    voiceManager.unlockAudio();
+  };
 
   // Audio level visualizer for mic input
   const setupAudioVisualizer = async () => {
@@ -81,6 +93,7 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
 
   // Toggle voice listening
   const toggleListening = () => {
+    handleTouchUnlock();
     if (isListening) {
       voiceManager.stopListening();
       setIsListening(false);
@@ -138,11 +151,11 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
     }
   };
 
-  // Manual test submission
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualInput.trim()) return;
-    handleTranslateSpeech(manualInput);
+    handleTouchUnlock();
+    await handleTranslateSpeech(manualInput.trim());
     setManualInput('');
   };
 
@@ -154,32 +167,60 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
   }, []);
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl relative overflow-hidden">
+    <div
+      onClick={handleTouchUnlock}
+      className="w-full max-w-4xl mx-auto flex flex-col items-center justify-between p-4 sm:p-6 bg-slate-950/90 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl relative overflow-hidden select-none"
+    >
       {/* Background glow */}
-      <div className="absolute -top-24 -left-24 w-72 h-72 bg-lime-500/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -top-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      {/* Header Info */}
-      <div className="text-center mb-6 z-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-lime-500/10 text-lime-400 border border-lime-500/20 text-xs font-bold uppercase tracking-wider mb-2">
+      {/* Top Bar Navigation */}
+      <div className="w-full flex items-center justify-between gap-3 mb-6 z-20 pb-3 border-b border-white/10">
+        <button
+          onClick={onBackToMenu}
+          className="px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 text-cyan-400" />
+          <span>Menü</span>
+        </button>
+
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-bold uppercase tracking-wider">
           <Radio className="w-3.5 h-3.5 animate-pulse" />
-          <span>CANLI SES VE OYUN KONUŞMASI ÇEVİRİSİ</span>
+          <span>CANLI SES ÇEVİRİSİ</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-black text-white">
-          Sesli Dublaj & Canlı Altyazı
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-lg mx-auto">
-          TV veya oyun sesini mikrofondan dinler, NVIDIA NIM ile anında Türkçe&apos;ye çevirir ve
-          isteğe göre seslendirir.
-        </p>
+
+        <button
+          onClick={() => {
+            handleTouchUnlock();
+            onToggleTts();
+          }}
+          className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+            settings.enableTts
+              ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300'
+              : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+          }`}
+        >
+          {settings.enableTts ? (
+            <>
+              <Volume2 className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <span className="hidden sm:inline">Dublaj: AÇIK</span>
+            </>
+          ) : (
+            <>
+              <VolumeX className="w-4 h-4 text-slate-400" />
+              <span className="hidden sm:inline">Dublaj: KAPALI</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Mic Animation & Visualizer Sphere */}
-      <div className="relative my-6 flex flex-col items-center justify-center z-10">
+      <div className="relative my-4 flex flex-col items-center justify-center z-10">
         {isListening && (
           <>
             <div
-              className="absolute rounded-full border border-lime-500/30 transition-all duration-300 pointer-events-none"
+              className="absolute rounded-full border border-cyan-500/30 transition-all duration-300 pointer-events-none"
               style={{
                 width: `${140 + audioLevel * 1.5}px`,
                 height: `${140 + audioLevel * 1.5}px`,
@@ -187,7 +228,7 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
               }}
             ></div>
             <div
-              className="absolute rounded-full border border-lime-400/20 transition-all duration-200 pointer-events-none animate-ping"
+              className="absolute rounded-full border border-cyan-400/20 transition-all duration-200 pointer-events-none animate-ping"
               style={{
                 width: '180px',
                 height: '180px',
@@ -198,10 +239,10 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
 
         <button
           onClick={toggleListening}
-          className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-2xl relative z-10 ${
+          className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-2xl relative z-10 cursor-pointer ${
             isListening
-              ? 'bg-gradient-to-tr from-lime-500 to-emerald-400 text-slate-950 shadow-lime-500/40 scale-105'
-              : 'bg-slate-900 border-2 border-slate-700 text-slate-400 hover:text-white hover:border-lime-500 hover:scale-105 shadow-black/80'
+              ? 'bg-gradient-to-tr from-cyan-500 to-emerald-400 text-slate-950 shadow-cyan-500/40 scale-105'
+              : 'bg-slate-900 border-2 border-slate-700 text-slate-400 hover:text-white hover:border-cyan-500 hover:scale-105 shadow-black/80'
           }`}
         >
           {isListening ? (
@@ -215,20 +256,20 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
             <>
               <MicOff className="w-10 h-10 sm:w-12 sm:h-12" />
               <span className="text-[11px] font-bold tracking-wider uppercase mt-1">
-                Mikrofonu Başlat
+                Dinlemeyi Başlat
               </span>
             </>
           )}
         </button>
 
         {isListening && (
-          <div className="flex items-center gap-1.5 mt-6 h-8">
+          <div className="flex items-center gap-1.5 mt-4 h-8">
             {[...Array(12)].map((_, i) => {
               const height = Math.max(4, (audioLevel / 100) * 32 * (1 - Math.abs(i - 6) * 0.12));
               return (
                 <div
                   key={i}
-                  className="w-1.5 bg-gradient-to-t from-lime-500 to-emerald-300 rounded-full transition-all duration-75"
+                  className="w-1.5 bg-gradient-to-t from-cyan-500 to-emerald-300 rounded-full transition-all duration-75"
                   style={{ height: `${height}px` }}
                 />
               );
@@ -237,72 +278,75 @@ export const VoiceView: React.FC<VoiceViewProps> = ({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3 my-4 z-10 w-full max-w-md">
-        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs">
-          <Globe className="w-4 h-4 text-slate-400" />
-          <span className="text-slate-400">Giriş Dili:</span>
-          <select
-            value={inputLang}
-            onChange={(e) => setInputLang(e.target.value)}
-            disabled={isListening}
-            className="bg-transparent text-white font-semibold outline-none cursor-pointer"
-          >
-            <option value="en-US" className="bg-slate-900">İngilizce (English)</option>
-            <option value="ja-JP" className="bg-slate-900">Japonca (Japanese)</option>
-            <option value="de-DE" className="bg-slate-900">Almanca (Deutsch)</option>
-            <option value="fr-FR" className="bg-slate-900">Fransızca (Français)</option>
-            <option value="ru-RU" className="bg-slate-900">Rusça (Russian)</option>
-            <option value="tr-TR" className="bg-slate-900">Türkçe (Turkish)</option>
-          </select>
-        </div>
-
-        <button
-          onClick={() => {
-            settings.enableTts = !settings.enableTts;
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
-            settings.enableTts
-              ? 'bg-lime-500/20 border-lime-500 text-lime-400'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-          }`}
+      {/* Input Language Select */}
+      <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs my-2 z-10">
+        <Globe className="w-4 h-4 text-slate-400" />
+        <span className="text-slate-400">Giriş Dili:</span>
+        <select
+          value={inputLang}
+          onChange={(e) => setInputLang(e.target.value)}
+          disabled={isListening}
+          className="bg-transparent text-white font-semibold outline-none cursor-pointer"
         >
-          {settings.enableTts ? (
-            <>
-              <Volume2 className="w-4 h-4" />
-              <span>Sesli Dublaj Aktif</span>
-            </>
-          ) : (
-            <>
-              <VolumeX className="w-4 h-4" />
-              <span>Sadece Altyazı</span>
-            </>
-          )}
-        </button>
+          <option value="en-US" className="bg-slate-900">İngilizce (English)</option>
+          <option value="ja-JP" className="bg-slate-900">Japonca (日本語)</option>
+          <option value="de-DE" className="bg-slate-900">Almanca (Deutsch)</option>
+          <option value="fr-FR" className="bg-slate-900">Fransızca (Français)</option>
+          <option value="es-ES" className="bg-slate-900">İspanyolca (Español)</option>
+          <option value="ko-KR" className="bg-slate-900">Korece (한국어)</option>
+          <option value="ru-RU" className="bg-slate-900">Rusça (Русский)</option>
+        </select>
       </div>
 
+      {/* Speech transcription buffer */}
       {interimText && (
-        <div className="w-full max-w-xl bg-slate-900/90 border border-lime-500/30 rounded-2xl p-4 my-2 text-center z-10 shadow-lg">
-          <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-            Algılanan Ses:
-          </span>
-          <p className="text-sm font-semibold text-white italic">&ldquo;{interimText}&rdquo;</p>
+        <div className="w-full max-w-lg mx-auto bg-slate-900/70 border border-cyan-500/30 rounded-xl p-3 my-2 text-center text-xs text-slate-300 italic animate-pulse z-10">
+          &quot;{interimText}&quot;
         </div>
       )}
 
-      <form onSubmit={handleManualSubmit} className="w-full max-w-lg mt-4 z-10 flex gap-2">
+      {/* Live Result Display */}
+      {currentResult && currentResult.translatedText && (
+        <div className="w-full max-w-2xl mx-auto my-3 z-10 animate-in fade-in slide-in-from-bottom-2">
+          <div className="bg-slate-900/90 border-2 border-cyan-500/40 rounded-2xl p-4 shadow-xl">
+            <div className="flex items-center justify-between text-xs text-cyan-400 font-bold mb-1 pb-1 border-b border-white/10">
+              <span className="flex items-center gap-1.5">
+                <Volume2 className="w-4 h-4" /> Türkçe Çeviri:
+              </span>
+              <button
+                onClick={() => onSpeak(currentResult.translatedText)}
+                className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-[10px]"
+              >
+                🔊 Tekrar Oku
+              </button>
+            </div>
+            <div className="text-white text-lg sm:text-xl font-black">
+              {currentResult.translatedText}
+            </div>
+            {currentResult.originalText && (
+              <div className="text-slate-400 text-xs mt-1 italic">
+                {currentResult.originalText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Manual Input Fallback */}
+      <form onSubmit={handleManualSubmit} className="w-full max-w-lg mt-3 z-10 flex gap-2">
         <input
           type="text"
           value={manualInput}
           onChange={(e) => setManualInput(e.target.value)}
-          placeholder="Veya çevrilecek bir oyun diyaloğu yazıp Enter'a basın..."
-          className="flex-1 bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-lime-500"
+          placeholder="Veya yazarak çevirip seslendirin..."
+          className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 transition"
         />
         <button
           type="submit"
-          disabled={!manualInput.trim() || isTranslating}
-          className="px-4 py-2.5 bg-lime-500 hover:bg-lime-400 disabled:bg-slate-800 text-slate-950 font-bold rounded-xl text-sm transition-all"
+          disabled={isTranslating || !manualInput.trim()}
+          className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition disabled:opacity-50 flex items-center gap-1 cursor-pointer"
         >
-          Çevir
+          <Zap className="w-3.5 h-3.5 fill-current" /> Çevir & Oku
         </button>
       </form>
     </div>

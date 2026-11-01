@@ -8,10 +8,12 @@ import {
   Volume2,
   VolumeX,
   AlertCircle,
-  Flame
+  ArrowLeft,
+  Radio,
 } from 'lucide-react';
 import type { AppSettings, TranslationResult } from '../types';
 import { translateImageFrame } from '../services/nvidiaApi';
+import { voiceManager } from '../services/voiceService';
 
 interface CameraViewProps {
   settings: AppSettings;
@@ -22,6 +24,9 @@ interface CameraViewProps {
   screenStream: MediaStream | null;
   onClearScreenStream: () => void;
   onSpeak: (text: string) => void;
+  onBackToMenu: () => void;
+  onToggleTts: () => void;
+  currentResult: TranslationResult | null;
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({
@@ -33,6 +38,9 @@ export const CameraView: React.FC<CameraViewProps> = ({
   screenStream,
   onClearScreenStream,
   onSpeak,
+  onBackToMenu,
+  onToggleTts,
+  currentResult,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -41,11 +49,17 @@ export const CameraView: React.FC<CameraViewProps> = ({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [isLiveAuto, setIsLiveAuto] = useState<boolean>(true); // Default to live auto-scan for games
+  const [isLiveAuto, setIsLiveAuto] = useState<boolean>(true); // Default to live auto-scan
   const [isFrozen, setIsFrozen] = useState<boolean>(false);
   const [showRoi, setShowRoi] = useState<boolean>(settings.roiEnabled);
   const [hasCameraError, setHasCameraError] = useState<string | null>(null);
+  const [isSpeakingNow, setIsSpeakingNow] = useState<boolean>(false);
   const lastFrameHashRef = useRef<string>('');
+
+  // Audio unlock helper for iOS WebKit
+  const handleTouchUnlock = () => {
+    voiceManager.unlockAudio();
+  };
 
   // List available video input devices
   const updateDeviceList = useCallback(async () => {
@@ -103,7 +117,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
       console.error('Kamera açma hatası:', err);
       let errMsg = 'Kamera başlatılamadı. Lütfen kamera izinlerini kontrol edin.';
       if (err.name === 'NotAllowedError') {
-        errMsg = 'Kamera erişim izni reddedildi. Lütfen tarayıcı/cihaz izinlerinden kameraya onay verin.';
+        errMsg = 'Kamera erişim izni reddedildi. Lütfen cihaz ayarlarından kamera izni verin.';
       } else if (err.name === 'NotFoundError') {
         errMsg = 'Kullanılabilir kamera bulunamadı.';
       }
@@ -121,7 +135,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     };
   }, [startCamera]);
 
-  // Quick 8x8 luminance hash for frame diff checking (avoids redundant API calls if subtitle hasn't changed)
+  // Quick 8x8 luminance hash for frame diff checking
   const computeQuickHash = (ctx: CanvasRenderingContext2D, width: number, height: number): string => {
     try {
       const stepX = Math.max(1, Math.floor(width / 8));
@@ -152,7 +166,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    let targetW = 640; // High speed target width for gaming
+    let targetW = 640;
     let targetH = 360;
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -179,7 +193,6 @@ export const CameraView: React.FC<CameraViewProps> = ({
       ctx.drawImage(video, 0, 0, targetW, targetH);
     }
 
-    // Check frame diff to avoid redundant requests if game dialogue is unchanged
     let changed = true;
     if (checkDiff) {
       const currentHash = computeQuickHash(ctx, targetW, targetH);
@@ -194,7 +207,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     return { base64, changed };
   }, [showRoi, settings.roiBox]);
 
-  // Perform translation
+  // Perform translation & automatic TTS audio dubbing
   const handleTranslateCurrentFrame = useCallback(async (isAutoScan: boolean = false) => {
     if (isTranslating) return;
 
@@ -206,7 +219,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     const captureResult = captureFrame(isAutoScan);
     if (!captureResult) return;
 
-    // If auto scanning and frame hasn't changed, skip to save quota and lag
+    // Skip if subtitle unchanged in auto-scan mode
     if (isAutoScan && !captureResult.changed) {
       return;
     }
@@ -221,10 +234,14 @@ export const CameraView: React.FC<CameraViewProps> = ({
         settings.visionModel
       );
 
-      if (result) {
+      if (result && result.translatedText) {
         onNewTranslation(result);
-        if (settings.enableTts && result.translatedText) {
+
+        // SESLİ DUBLAJ: Ekrandaki çeviriyi anında seslendir
+        if (settings.enableTts) {
+          setIsSpeakingNow(true);
           onSpeak(result.translatedText);
+          setTimeout(() => setIsSpeakingNow(false), 3000);
         }
       }
     } catch (err: any) {
@@ -261,8 +278,16 @@ export const CameraView: React.FC<CameraViewProps> = ({
     return () => clearInterval(interval);
   }, [isLiveAuto, isFrozen, isTranslating, settings.autoIntervalSeconds, handleTranslateCurrentFrame]);
 
-  // Freeze Frame Toggle
+  // Toggle Facing Mode
+  const toggleFacingMode = () => {
+    handleTouchUnlock();
+    setSelectedDeviceId('');
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  };
+
+  // Toggle freeze frame
   const toggleFreeze = () => {
+    handleTouchUnlock();
     const video = videoRef.current;
     if (!video) return;
 
@@ -276,17 +301,107 @@ export const CameraView: React.FC<CameraViewProps> = ({
     }
   };
 
-  const toggleFacingMode = () => {
-    setSelectedDeviceId('');
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
-  };
-
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden rounded-3xl border border-slate-800 shadow-2xl">
+    <div
+      onClick={handleTouchUnlock}
+      className="relative w-full h-full flex flex-col items-center justify-between bg-black overflow-hidden rounded-3xl border border-slate-800 shadow-2xl select-none"
+    >
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Video Viewport */}
-      <div className="relative w-full h-full flex items-center justify-center min-h-[320px] max-h-[70vh]">
+      {/* TOP HEADER HUD */}
+      <div className="absolute top-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-b from-slate-950/95 via-slate-950/70 to-transparent flex items-center justify-between gap-2 backdrop-blur-sm">
+        {/* Back to Menu Button */}
+        <button
+          onClick={onBackToMenu}
+          className="px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition"
+        >
+          <ArrowLeft className="w-4 h-4 text-emerald-400" />
+          <span>Menü</span>
+        </button>
+
+        {/* Center Live Status */}
+        <div className="flex items-center gap-2">
+          {isTranslating ? (
+            <div className="px-3 py-1.5 bg-emerald-500 text-slate-950 text-xs font-black rounded-full flex items-center gap-1.5 shadow-lg shadow-emerald-500/30 animate-pulse">
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>ÇEVRİLİYOR...</span>
+            </div>
+          ) : (
+            <div className="px-3 py-1.5 bg-black/70 border border-white/10 rounded-full text-xs font-semibold text-slate-300 flex items-center gap-1.5 backdrop-blur-md">
+              <span className={`w-2 h-2 rounded-full ${isLiveAuto ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span>{isLiveAuto ? 'CANLI TARAMA' : 'DURAKLATILDI'}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Top Right Controls */}
+        <div className="flex items-center gap-2">
+          {/* TTS Dubbing Toggle Button */}
+          <button
+            onClick={() => {
+              handleTouchUnlock();
+              onToggleTts();
+            }}
+            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
+              settings.enableTts
+                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 shadow-emerald-500/20'
+                : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+            }`}
+            title="Sesli Dublajı Aç/Kapat"
+          >
+            {settings.enableTts ? (
+              <>
+                <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline">Dublaj: AÇIK</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-slate-400" />
+                <span className="hidden sm:inline">Dublaj: KAPALI</span>
+              </>
+            )}
+          </button>
+
+          {/* Clear PC Screen Share Button */}
+          {screenStream && (
+            <button
+              onClick={onClearScreenStream}
+              className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 font-bold text-xs"
+            >
+              Ekranı Kapat
+            </button>
+          )}
+
+          {/* Device Selector */}
+          {devices.length > 1 && !screenStream && (
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              className="bg-slate-900 border border-white/10 text-slate-300 text-xs rounded-xl px-2 py-1 outline-none hidden md:inline-block"
+            >
+              {devices.map((d, idx) => (
+                <option key={d.deviceId || idx} value={d.deviceId}>
+                  {d.label || `Kamera ${idx + 1}`}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Camera Flip */}
+          {!screenStream && (
+            <button
+              onClick={toggleFacingMode}
+              className="p-2 rounded-xl bg-slate-900/80 border border-white/15 text-slate-300 hover:text-white active:scale-95 transition cursor-pointer"
+              title="Kamera Değiştir (Ön/Arka)"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* CAMERA VIDEO VIEWPORT */}
+      <div className="relative w-full flex-1 flex items-center justify-center min-h-[300px] overflow-hidden">
         <video
           ref={videoRef}
           playsInline
@@ -297,61 +412,25 @@ export const CameraView: React.FC<CameraViewProps> = ({
           }`}
         />
 
+        {/* Error Screen */}
         {hasCameraError && (
-          <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center z-20">
+          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-20">
             <AlertCircle className="w-12 h-12 text-rose-500 mb-3 animate-bounce" />
             <h3 className="text-lg font-bold text-white mb-2">Kamera Açılamadı</h3>
             <p className="text-sm text-slate-400 max-w-md mb-4">{hasCameraError}</p>
             <button
               onClick={startCamera}
-              className="px-4 py-2 bg-lime-500 text-slate-950 font-bold rounded-xl flex items-center gap-2 hover:bg-lime-400"
+              className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl flex items-center gap-2 hover:bg-emerald-400"
             >
               <RefreshCw className="w-4 h-4" /> Yeniden Dene
             </button>
           </div>
         )}
 
-        {/* Top Badges */}
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 flex-wrap">
-          <div className="px-3 py-1 bg-black/70 backdrop-blur-md border border-lime-500/30 rounded-full text-lime-400 text-xs font-black flex items-center gap-1.5 shadow-lg">
-            <Flame className="w-3.5 h-3.5 text-lime-400 animate-pulse" />
-            <span>TURBO OYUN MODU</span>
-          </div>
-
-          {screenStream ? (
-            <div className="px-3 py-1 bg-sky-500/80 backdrop-blur-md rounded-full text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-              <span>PC Ekranı</span>
-              <button
-                onClick={onClearScreenStream}
-                className="ml-1 text-[10px] bg-sky-900/60 hover:bg-rose-500 px-1.5 py-0.5 rounded transition-colors"
-              >
-                Kapat
-              </button>
-            </div>
-          ) : (
-            <div className="px-3 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-slate-300 text-xs font-semibold flex items-center gap-2">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isLiveAuto ? 'bg-lime-400 animate-ping' : isFrozen ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-              ></span>
-              <span>{isFrozen ? 'DONDURULDU' : isLiveAuto ? 'CANLI OTO-TARAMA' : 'BEKLEMEDE'}</span>
-            </div>
-          )}
-
-          {isTranslating && (
-            <div className="px-3 py-1 bg-lime-500 text-slate-950 text-xs font-black rounded-full flex items-center gap-1.5 shadow-lg shadow-lime-500/30">
-              <Zap className="w-3.5 h-3.5 fill-current animate-bounce" />
-              <span>NVIDIA NIM</span>
-            </div>
-          )}
-        </div>
-
-        {/* Region of Interest (ROI) Box Overlay */}
+        {/* SUBTITLE FOCUS BOX (ROI) */}
         {showRoi && (
           <div
-            className="absolute border-2 border-dashed border-lime-400/80 bg-lime-400/5 pointer-events-none rounded-lg shadow-[0_0_15px_rgba(118,185,0,0.3)] transition-all"
+            className="absolute border-2 border-dashed border-emerald-400/70 bg-emerald-400/5 pointer-events-none rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all"
             style={{
               left: `${settings.roiBox.x}%`,
               top: `${settings.roiBox.y}%`,
@@ -359,118 +438,124 @@ export const CameraView: React.FC<CameraViewProps> = ({
               height: `${settings.roiBox.height}%`,
             }}
           >
-            <div className="absolute -top-6 left-0 bg-lime-500 text-slate-950 px-2 py-0.5 text-[10px] font-black rounded uppercase tracking-wider flex items-center gap-1">
-              <Crop className="w-3 h-3" /> TV Altyazı Odak Alanı
+            <div className="absolute -top-5 left-2 bg-emerald-500 text-slate-950 px-2 py-0.5 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1 shadow">
+              <Crop className="w-2.5 h-2.5" /> Altyazıyı Bu Alana Denk Getirin
             </div>
           </div>
         )}
       </div>
 
-      {/* Floating Bottom Control Bar */}
-      <div className="w-full bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent p-4 sm:p-5 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-slate-900">
-        <div className="flex items-center gap-2 flex-wrap">
-          {devices.length > 1 && !screenStream && (
-            <select
-              value={selectedDeviceId}
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-lime-500"
-            >
-              {devices.map((d, idx) => (
-                <option key={d.deviceId || idx} value={d.deviceId}>
-                  {d.label || `Kamera ${idx + 1}`}
-                </option>
-              ))}
-            </select>
-          )}
+      {/* INTEGRATED SUBTITLE DISPLAY HUD */}
+      {currentResult && currentResult.translatedText && (
+        <div className="w-full px-3 py-2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="max-w-3xl mx-auto rounded-2xl bg-slate-950/95 border-2 border-emerald-500/50 shadow-2xl p-3.5 backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/10 text-[11px]">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                {isSpeakingNow ? (
+                  <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span>{isSpeakingNow ? 'Seslendiriliyor...' : 'Türkçe Altyazı'}</span>
+              </div>
 
-          {!screenStream && (
-            <button
-              onClick={toggleFacingMode}
-              title="Ön / Arka Kamera Değiştir"
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          )}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-[10px]">
+                  ⚡ {currentResult.latencyMs}ms
+                </span>
+                <button
+                  onClick={() => {
+                    handleTouchUnlock();
+                    onSpeak(currentResult.translatedText);
+                  }}
+                  className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[10px] flex items-center gap-1"
+                >
+                  <Volume2 className="w-3 h-3" /> Tekrar Dinle
+                </button>
+              </div>
+            </div>
 
-          <button
-            onClick={() => setShowRoi(!showRoi)}
-            title="Altyazı Bölgesi Odakla (ROI)"
-            className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              showRoi
-                ? 'bg-lime-500/20 border-lime-500/50 text-lime-400'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            <Crop className="w-4 h-4" />
-            <span className="hidden sm:inline">Altyazı Alanı</span>
-          </button>
+            {/* Main Translated Subtitle Text */}
+            <div className="text-white font-extrabold text-base sm:text-xl leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              {currentResult.translatedText}
+            </div>
+
+            {/* Original Text if available */}
+            {currentResult.originalText && (
+              <div className="text-slate-400 text-xs mt-1 italic font-medium truncate">
+                {currentResult.originalText}
+              </div>
+            )}
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleTranslateCurrentFrame(false)}
-            disabled={isTranslating}
-            className={`px-6 py-3 rounded-2xl font-black text-sm tracking-wide flex items-center gap-2 shadow-lg transition-all ${
-              isTranslating
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                : 'bg-lime-500 hover:bg-lime-400 text-slate-950 shadow-lime-500/25 active:scale-95'
-            }`}
-          >
-            <Zap className="w-5 h-5 fill-current" />
-            <span>{isTranslating ? 'ÇEVRİLİYOR...' : 'ŞİMDİ ÇEVİR (SNAP)'}</span>
-          </button>
+      {/* STREAMLINED BOTTOM CONTROLS */}
+      <div className="w-full bg-slate-950/95 p-3 sm:p-4 z-20 flex items-center justify-between gap-3 border-t border-slate-900 backdrop-blur-md">
+        {/* Left: ROI Toggle */}
+        <button
+          onClick={() => {
+            handleTouchUnlock();
+            setShowRoi(!showRoi);
+          }}
+          className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+            showRoi
+              ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300'
+              : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+          }`}
+          title="Altyazı Çerçevesi"
+        >
+          <Crop className="w-4 h-4" />
+          <span className="hidden sm:inline">Odak Çerçevesi</span>
+        </button>
 
+        {/* Center: BIG SNAP & TRANSLATE BUTTON */}
+        <button
+          onClick={() => {
+            handleTouchUnlock();
+            handleTranslateCurrentFrame(false);
+          }}
+          disabled={isTranslating}
+          className={`flex-1 max-w-xs py-3 px-4 rounded-2xl font-black text-sm tracking-wide flex items-center justify-center gap-2 shadow-xl transition-all ${
+            isTranslating
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/25 active:scale-95 cursor-pointer'
+          }`}
+        >
+          <Zap className="w-4 h-4 fill-current" />
+          <span>{isTranslating ? 'ÇEVRİLİYOR...' : 'ŞİMDİ ÇEVİR & DUBLAJ'}</span>
+        </button>
+
+        {/* Right: Live Auto-Scan Toggle & Freeze */}
+        <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setIsLiveAuto(!isLiveAuto)}
-            className={`px-4 py-3 rounded-2xl font-bold text-sm flex items-center gap-2 border transition-all ${
+            onClick={() => {
+              handleTouchUnlock();
+              setIsLiveAuto(!isLiveAuto);
+            }}
+            className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
               isLiveAuto
-                ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-rose-500/20 shadow-lg'
-                : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-md shadow-rose-500/10'
+                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
             }`}
+            title="Canlı Otomatik Tarama"
           >
             {isLiveAuto ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            <span className="hidden md:inline">
-              {isLiveAuto ? 'Oto-Taramayı Durdur' : `Oto-Tarama (${settings.autoIntervalSeconds}s)`}
+            <span className="hidden sm:inline">
+              {isLiveAuto ? 'Oto-Durdur' : 'Oto-Başlat'}
             </span>
           </button>
 
           <button
             onClick={toggleFreeze}
-            title={isFrozen ? 'Yayını Devam Ettir' : 'Kareyi Dondur ve Oku'}
-            className={`p-3 rounded-2xl border transition-all ${
+            className={`p-2.5 rounded-xl border text-xs transition cursor-pointer ${
               isFrozen
-                ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
             }`}
+            title={isFrozen ? 'Yayını Sürdür' : 'Ekranı Dondur & Oku'}
           >
-            {isFrozen ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              settings.enableTts = !settings.enableTts;
-            }}
-            title={settings.enableTts ? 'Sesli Dublaj Açık' : 'Sesli Dublaj Kapalı'}
-            className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
-              settings.enableTts
-                ? 'bg-lime-500/20 border-lime-500 text-lime-400'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            {settings.enableTts ? (
-              <>
-                <Volume2 className="w-4 h-4" />
-                <span className="hidden lg:inline">Sesli Dublaj</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4" />
-                <span className="hidden lg:inline">Sessiz</span>
-              </>
-            )}
+            {isFrozen ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
           </button>
         </div>
       </div>

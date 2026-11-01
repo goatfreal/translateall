@@ -10,6 +10,7 @@ class VoiceManager {
   private recognition: any = null;
   private isListening = false;
   private synthesisVoice: SpeechSynthesisVoice | null = null;
+  private isAudioUnlocked = false;
 
   constructor() {
     this.initVoices();
@@ -26,11 +27,34 @@ class VoiceManager {
 
   private selectTurkishVoice() {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    const voices = window.speechSynthesis.getVoices();
-    this.synthesisVoice =
-      voices.find((v) => v.lang.startsWith('tr') || v.name.toLowerCase().includes('turkish')) ||
-      voices.find((v) => v.lang.startsWith('en')) ||
-      null;
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return;
+      this.synthesisVoice =
+        voices.find((v) => v.lang.startsWith('tr') || v.lang.startsWith('TR') || v.name.toLowerCase().includes('turkish')) ||
+        voices.find((v) => v.lang.startsWith('en')) ||
+        voices[0] ||
+        null;
+    } catch (e) {
+      console.warn('Voice select error:', e);
+    }
+  }
+
+  // Pre-unlocks audio context on iOS WKWebView upon any touch gesture
+  public unlockAudio() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (this.isAudioUnlocked) return;
+
+    try {
+      const dummy = new SpeechSynthesisUtterance('');
+      dummy.volume = 0.01;
+      dummy.rate = 2.0;
+      window.speechSynthesis.speak(dummy);
+      this.isAudioUnlocked = true;
+      this.selectTurkishVoice();
+    } catch (e) {
+      console.warn('Could not unlock audio:', e);
+    }
   }
 
   public isSpeechSupported(): boolean {
@@ -45,6 +69,8 @@ class VoiceManager {
     handlers: VoiceRecognitionHandlers,
     lang: string = 'en-US'
   ): boolean {
+    this.unlockAudio();
+
     if (!this.isSpeechSupported()) {
       handlers.onError('Tarayıcınız veya cihazınız Web Speech API ses tanımayı desteklemiyor.');
       return false;
@@ -89,15 +115,13 @@ class VoiceManager {
       };
 
       this.recognition.onerror = (event: any) => {
-        // 'no-speech' is common and harmless during quiet periods
         if (event.error !== 'no-speech') {
-          handlers.onError(`Mikrofon/Ses hatası: ${event.error}`);
+          handlers.onError(`Mikrofon hatası: ${event.error}`);
         }
       };
 
       this.recognition.onend = () => {
         if (this.isListening) {
-          // Restart if still supposed to be listening (for continuous gaming session)
           try {
             this.recognition.start();
           } catch {
@@ -133,27 +157,34 @@ class VoiceManager {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     if (!text || text.trim() === '') return;
 
-    // Stop current speech so it stays synced with real-time video/audio
-    window.speechSynthesis.cancel();
+    try {
+      this.unlockAudio();
+      // Cancel previous speech to stay in real-time sync with in-game scenes
+      window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = Math.max(0.5, Math.min(2.0, speed));
-    utterance.pitch = 1.0;
-    utterance.lang = lang;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = Math.max(0.7, Math.min(1.8, speed));
+      utterance.pitch = 1.0;
+      utterance.lang = lang;
 
-    if (!this.synthesisVoice) {
-      this.selectTurkishVoice();
+      if (!this.synthesisVoice) {
+        this.selectTurkishVoice();
+      }
+      if (this.synthesisVoice) {
+        utterance.voice = this.synthesisVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('TTS playback error:', e);
     }
-    if (this.synthesisVoice) {
-      utterance.voice = this.synthesisVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
   }
 
   public stopSpeaking() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
     }
   }
 }

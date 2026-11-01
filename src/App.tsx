@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Header } from './components/Header';
+import { MainMenu } from './components/MainMenu';
 import { CameraView } from './components/CameraView';
 import { VoiceView } from './components/VoiceView';
-import { SubtitleOverlay } from './components/SubtitleOverlay';
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { DEFAULT_SETTINGS } from './types';
@@ -10,8 +9,8 @@ import type { AppSettings, TranslationResult } from './types';
 import { voiceManager } from './services/voiceService';
 import { X, AlertCircle } from 'lucide-react';
 
-const SETTINGS_STORAGE_KEY = 'translateall_settings_v1';
-const HISTORY_STORAGE_KEY = 'translateall_history_v1';
+const SETTINGS_STORAGE_KEY = 'translateall_settings_v2';
+const HISTORY_STORAGE_KEY = 'translateall_history_v2';
 
 export function App() {
   // Load settings from localStorage
@@ -23,6 +22,7 @@ export function App() {
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          enableTts: parsed.enableTts !== undefined ? parsed.enableTts : true,
           nvidiaApiKey: parsed.nvidiaApiKey && parsed.nvidiaApiKey.trim() ? parsed.nvidiaApiKey : DEFAULT_SETTINGS.nvidiaApiKey,
         };
       }
@@ -42,7 +42,8 @@ export function App() {
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'camera' | 'voice'>('camera');
+  // App navigation state: 'menu' | 'camera' | 'voice'
+  const [activeTab, setActiveTab] = useState<'menu' | 'camera' | 'voice'>('menu');
   const [currentResult, setCurrentResult] = useState<TranslationResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -50,7 +51,6 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [tvMode, setTvMode] = useState(settings.tvMode);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const appContainerRef = useRef<HTMLDivElement | null>(null);
@@ -64,6 +64,18 @@ export function App() {
       console.warn('Could not save settings:', e);
     }
   };
+
+  // Toggle TTS dubbing helper
+  const handleToggleTts = useCallback(() => {
+    voiceManager.unlockAudio();
+    setSettings((prev) => {
+      const updated = { ...prev, enableTts: !prev.enableTts };
+      try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
 
   // Add new translation
   const handleNewTranslation = useCallback(
@@ -98,6 +110,7 @@ export function App() {
   // Text to speech helper
   const handleSpeak = useCallback(
     (text: string) => {
+      voiceManager.unlockAudio();
       voiceManager.speak(text, settings.ttsVoiceSpeed);
     },
     [settings.ttsVoiceSpeed]
@@ -106,6 +119,7 @@ export function App() {
   // Screen share on PC
   const handleScreenShare = async () => {
     try {
+      voiceManager.unlockAudio();
       if (!navigator.mediaDevices?.getDisplayMedia) {
         showError('Bu platformda ekran yakalama desteklenmiyor.');
         return;
@@ -139,10 +153,8 @@ export function App() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
     } else {
       document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
     }
   };
 
@@ -155,8 +167,10 @@ export function App() {
 
       if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
-      } else if (e.key === 'm' || e.key === 'M') {
-        setActiveTab((prev) => (prev === 'camera' ? 'voice' : 'camera'));
+      } else if (e.key === 'Escape' || e.key === 'Backspace') {
+        if (activeTab !== 'menu') {
+          setActiveTab('menu');
+        }
       } else if (e.key === 't' || e.key === 'T') {
         setTvMode((prev) => !prev);
       }
@@ -164,36 +178,19 @@ export function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeTab]);
 
   return (
     <div
       ref={appContainerRef}
-      className={`min-h-screen bg-slate-950 text-white flex flex-col font-sans select-none ${
+      className={`min-h-screen bg-slate-950 text-white flex flex-col font-sans select-none overflow-x-hidden ${
         tvMode ? 'tv-interface' : ''
       }`}
     >
-      {/* Header bar */}
-      {!tvMode && (
-        <Header
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          tvMode={tvMode}
-          setTvMode={setTvMode}
-          openSettings={() => setIsSettingsOpen(true)}
-          toggleHistory={() => setIsHistoryOpen(true)}
-          historyCount={history.length}
-          isFullscreen={isFullscreen}
-          toggleFullscreen={toggleFullscreen}
-          apiKeyConfigured={!!settings.nvidiaApiKey.trim()}
-          onSelectScreenShare={handleScreenShare}
-        />
-      )}
-
       {/* Error Toast Notification */}
       {errorMessage && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-full px-4 animate-in fade-in slide-in-from-top-4 duration-200">
-          <div className="bg-rose-500/90 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 backdrop-blur-md border border-rose-400/40">
+          <div className="bg-rose-500/95 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 backdrop-blur-md border border-rose-400/40">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <span className="text-xs sm:text-sm font-semibold">{errorMessage}</span>
@@ -208,52 +205,49 @@ export function App() {
         </div>
       )}
 
-      {/* TV Mode Minimal Exit Button */}
-      {tvMode && (
-        <div className="fixed top-3 right-4 z-40 flex items-center gap-2">
-          <button
-            onClick={() => setTvMode(false)}
-            className="px-3 py-1.5 bg-black/70 hover:bg-black text-xs font-bold text-slate-300 rounded-full border border-white/20 backdrop-blur-md"
-          >
-            TV Modundan Çık (T)
-          </button>
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 bg-black/70 hover:bg-black rounded-full border border-white/20 text-slate-300 backdrop-blur-md"
-          >
-            Ayarlar
-          </button>
-        </div>
-      )}
+      {/* Main View Router */}
+      <main className="flex-1 flex flex-col w-full h-full">
+        {activeTab === 'menu' && (
+          <MainMenu
+            onStartCamera={() => {
+              voiceManager.unlockAudio();
+              setActiveTab('camera');
+            }}
+            onStartVoice={() => {
+              voiceManager.unlockAudio();
+              setActiveTab('voice');
+            }}
+            onStartScreenShare={handleScreenShare}
+            openSettings={() => setIsSettingsOpen(true)}
+            openHistory={() => setIsHistoryOpen(true)}
+            settings={settings}
+            onToggleTts={handleToggleTts}
+            historyCount={history.length}
+            lastTranslation={currentResult}
+            onSpeak={handleSpeak}
+          />
+        )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 flex flex-col gap-4">
-        {activeTab === 'camera' ? (
-          <div className="flex-1 flex flex-col gap-4">
-            <div className="flex-1 min-h-[360px]">
-              <CameraView
-                settings={settings}
-                onNewTranslation={handleNewTranslation}
-                isTranslating={isTranslating}
-                setIsTranslating={setIsTranslating}
-                onError={showError}
-                screenStream={screenStream}
-                onClearScreenStream={handleClearScreenStream}
-                onSpeak={handleSpeak}
-              />
-            </div>
-
-            <div className="w-full">
-              <SubtitleOverlay
-                currentResult={currentResult}
-                settings={settings}
-                onSpeak={handleSpeak}
-                isTranslating={isTranslating}
-              />
-            </div>
+        {activeTab === 'camera' && (
+          <div className="flex-1 flex flex-col w-full h-full p-2 sm:p-4 max-w-6xl mx-auto">
+            <CameraView
+              settings={settings}
+              onNewTranslation={handleNewTranslation}
+              isTranslating={isTranslating}
+              setIsTranslating={setIsTranslating}
+              onError={showError}
+              screenStream={screenStream}
+              onClearScreenStream={handleClearScreenStream}
+              onSpeak={handleSpeak}
+              onBackToMenu={() => setActiveTab('menu')}
+              onToggleTts={handleToggleTts}
+              currentResult={currentResult}
+            />
           </div>
-        ) : (
-          <div className="flex-1 flex flex-col gap-4">
+        )}
+
+        {activeTab === 'voice' && (
+          <div className="flex-1 flex flex-col w-full h-full p-2 sm:p-4 max-w-4xl mx-auto">
             <VoiceView
               settings={settings}
               onNewTranslation={handleNewTranslation}
@@ -261,16 +255,10 @@ export function App() {
               setIsTranslating={setIsTranslating}
               onError={showError}
               onSpeak={handleSpeak}
+              onBackToMenu={() => setActiveTab('menu')}
+              onToggleTts={handleToggleTts}
+              currentResult={currentResult}
             />
-
-            <div className="w-full">
-              <SubtitleOverlay
-                currentResult={currentResult}
-                settings={settings}
-                onSpeak={handleSpeak}
-                isTranslating={isTranslating}
-              />
-            </div>
           </div>
         )}
       </main>

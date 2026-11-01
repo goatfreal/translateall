@@ -1,6 +1,79 @@
 import type { TranslationResult } from '../types';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 const NVIDIA_API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+
+// Universal network poster that uses native iOS/Android networking to avoid WebKit CORS 'Load failed' errors
+async function postToNvidia(payload: any, apiKey: string): Promise<any> {
+  const trimmedKey = apiKey.trim();
+
+  // On Native iOS / Android or Capacitor environment, use native NSURLSession / OkHttp
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await CapacitorHttp.post({
+        url: NVIDIA_API_URL,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${trimmedKey}`,
+        },
+        data: payload,
+      });
+
+      if (res.status >= 200 && res.status < 300) {
+        if (typeof res.data === 'string') {
+          return JSON.parse(res.data);
+        }
+        return res.data;
+      }
+
+      let errorMsg = `NVIDIA API Hatası (${res.status})`;
+      if (res.data) {
+        if (typeof res.data === 'object') {
+          errorMsg = res.data.detail || res.data.message || errorMsg;
+        } else if (typeof res.data === 'string') {
+          try {
+            const p = JSON.parse(res.data);
+            errorMsg = p.detail || p.message || errorMsg;
+          } catch {
+            errorMsg = res.data;
+          }
+        }
+      }
+      throw new Error(errorMsg);
+    } catch (e: any) {
+      // If it's a known API error, throw directly
+      if (e?.message && e.message.startsWith('NVIDIA API Hatası')) {
+        throw e;
+      }
+      console.warn('Native CapacitorHttp failed, attempting standard fetch:', e);
+    }
+  }
+
+  // Fallback for Electron / Web browsers
+  const response = await fetch(NVIDIA_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${trimmedKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let message = `NVIDIA API Hatası (${response.status})`;
+    try {
+      const parsed = JSON.parse(errorBody);
+      if (parsed.detail) message = parsed.detail;
+      else if (parsed.message) message = parsed.message;
+    } catch {
+      if (errorBody) message = errorBody;
+    }
+    throw new Error(message);
+  }
+
+  return await response.json();
+}
 
 export async function translateImageFrame(
   base64Image: string,
@@ -18,10 +91,10 @@ export async function translateImageFrame(
   const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
 
   // Optimized ultra-concise prompt for minimal latency in gaming
-  const prompt = `You are a real-time game translator.
-Extract visible subtitles, dialogue, or UI text in this game frame.
+  const prompt = `You are a real-time game subtitle translator.
+Find visible foreign dialogue, subtitles, or UI text in this game frame.
 Translate directly into ${targetLangName}.
-If no text is visible, output None.
+If no text is visible or readable, output None.
 Format:
 Original: <in-game text>
 Translation: <${targetLangName} text>`;
@@ -49,31 +122,9 @@ Translation: <${targetLangName} text>`;
     max_tokens: 100,
   };
 
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey.trim()}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
+  const data = await postToNvidia(payload, apiKey);
   const latencyMs = Math.round(performance.now() - startTime);
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    let message = `NVIDIA API Hatası (${response.status})`;
-    try {
-      const parsed = JSON.parse(errorBody);
-      if (parsed.detail) message = parsed.detail;
-      else if (parsed.message) message = parsed.message;
-    } catch {
-      if (errorBody) message = errorBody;
-    }
-    throw new Error(message);
-  }
-
-  const data = await response.json();
   const rawContent: string = data.choices?.[0]?.message?.content || '';
 
   if (!rawContent || rawContent.trim() === '' || rawContent.trim().toLowerCase() === 'none') {
@@ -124,31 +175,9 @@ export async function translateText(
     max_tokens: 80,
   };
 
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey.trim()}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
+  const data = await postToNvidia(payload, apiKey);
   const latencyMs = Math.round(performance.now() - startTime);
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    let message = `NVIDIA API Hatası (${response.status})`;
-    try {
-      const parsed = JSON.parse(errorBody);
-      if (parsed.detail) message = parsed.detail;
-      else if (parsed.message) message = parsed.message;
-    } catch {
-      if (errorBody) message = errorBody;
-    }
-    throw new Error(message);
-  }
-
-  const data = await response.json();
   let translatedText: string = data.choices?.[0]?.message?.content?.trim() || '';
 
   // Clean quotes if model added surrounding quotes
