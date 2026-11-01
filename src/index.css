@@ -5,6 +5,8 @@
     --bg-dark: #090d16;
     --card-dark: #111827;
     --accent-nvidia: #76b900;
+    --sat: env(safe-area-inset-top, 44px);
+    --sab: env(safe-area-inset-bottom, 24px);
   }
 
   body {
@@ -15,6 +17,16 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     user-select: none;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Safe Area Utilities for iOS Dynamic Island, Notch & Clock */
+  .safe-header {
+    padding-top: max(env(safe-area-inset-top, 0px), 52px) !important;
+  }
+
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 24px) !important;
   }
 
   /* Focus ring for TV D-pad / remote control navigation */

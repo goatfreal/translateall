@@ -7,7 +7,7 @@ const NVIDIA_API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 async function postToNvidia(payload: any, apiKey: string): Promise<any> {
   const trimmedKey = apiKey.trim();
 
-  // On Native iOS / Android or Capacitor environment, use native NSURLSession / OkHttp
+  // On Native iOS / Android (Capacitor), route through native NSURLSession / OkHttp
   if (Capacitor.isNativePlatform()) {
     try {
       const res = await CapacitorHttp.post({
@@ -41,7 +41,6 @@ async function postToNvidia(payload: any, apiKey: string): Promise<any> {
       }
       throw new Error(errorMsg);
     } catch (e: any) {
-      // If it's a known API error, throw directly
       if (e?.message && e.message.startsWith('NVIDIA API Hatası')) {
         throw e;
       }
@@ -90,13 +89,13 @@ export async function translateImageFrame(
   // Strip data:image/...;base64, prefix if present
   const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
 
-  // Optimized ultra-concise prompt for minimal latency in gaming
+  // High performance game subtitle OCR & translation prompt
   const prompt = `You are a real-time game subtitle translator.
-Find visible foreign dialogue, subtitles, or UI text in this game frame.
+Read foreign game subtitles or dialogue in this cropped frame.
 Translate directly into ${targetLangName}.
-If no text is visible or readable, output None.
+If no dialogue is visible, output None.
 Format:
-Original: <in-game text>
+Original: <text>
 Translation: <${targetLangName} text>`;
 
   const payload = {
@@ -112,20 +111,22 @@ Translation: <${targetLangName} text>`;
           {
             type: 'image_url',
             image_url: {
-              url: `data:image/jpeg;base64,${cleanBase64}`,
+              url: `data:image/jpeg;base64,{cleanBase64}`.replace('{cleanBase64}', cleanBase64),
             },
           },
         ],
       },
     ],
     temperature: 0.1,
-    max_tokens: 100,
+    max_tokens: 400,
   };
 
   const data = await postToNvidia(payload, apiKey);
   const latencyMs = Math.round(performance.now() - startTime);
 
-  const rawContent: string = data.choices?.[0]?.message?.content || '';
+  const choice = data.choices?.[0]?.message;
+  // Nemotron 3.5 Super VL outputs reasoning & final response in reasoning_content or content!
+  const rawContent: string = choice?.content || choice?.reasoning_content || '';
 
   if (!rawContent || rawContent.trim() === '' || rawContent.trim().toLowerCase() === 'none') {
     return null;
@@ -172,7 +173,7 @@ export async function translateText(
       },
     ],
     temperature: 0.1,
-    max_tokens: 80,
+    max_tokens: 120,
   };
 
   const data = await postToNvidia(payload, apiKey);
@@ -201,15 +202,24 @@ function parseVisionResponse(
   content: string,
   _targetLang: string
 ): { detectedText: string; translatedText: string } {
-  // Check for Original: / Translation: format
-  const origMatch = content.match(/Original:\s*(.+)/i);
-  const transMatch = content.match(/Translation:\s*(.+)/i);
+  // Use regex to find all matches, then pick the final clean output block
+  const origMatches = Array.from(content.matchAll(/Original:\s*(.+)/gi));
+  const transMatches = Array.from(content.matchAll(/Translation:\s*(.+)/gi));
 
-  if (transMatch) {
-    return {
-      detectedText: origMatch ? origMatch[1].trim() : '',
-      translatedText: transMatch[1].trim(),
-    };
+  if (transMatches.length > 0) {
+    const rawTrans = transMatches[transMatches.length - 1][1].trim();
+    const rawOrig = origMatches.length > 0 ? origMatches[origMatches.length - 1][1].trim() : '';
+    
+    // Clean quotes, asterisks, brackets
+    const cleanTrans = rawTrans.replace(/^["'*_`]+|["'*_`]+$/g, '').trim();
+    const cleanOrig = rawOrig.replace(/^["'*_`]+|["'*_`]+$/g, '').trim();
+
+    if (cleanTrans && cleanTrans.toLowerCase() !== 'none') {
+      return {
+        detectedText: cleanOrig,
+        translatedText: cleanTrans,
+      };
+    }
   }
 
   // Check JSON format
@@ -224,9 +234,16 @@ function parseVisionResponse(
     }
   } catch {}
 
-  // Fallback: entire content is translation
+  // Fallback: If output doesn't contain thinking boilerplate
+  if (!content.includes('The user wants') && !content.includes('Identify the text') && content.length < 250) {
+    return {
+      detectedText: '',
+      translatedText: content.trim(),
+    };
+  }
+
   return {
     detectedText: '',
-    translatedText: content.trim(),
+    translatedText: '',
   };
 }

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Gamepad2,
   Tv,
   Mic,
   Volume2,
@@ -44,39 +43,39 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const isPc = typeof window !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
 
   return (
-    <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-4 py-4 sm:py-8 animate-in fade-in duration-300">
-      {/* Top Bar: Brand & Quick Settings */}
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 mb-6">
+    <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-4 safe-header safe-bottom animate-in fade-in duration-300">
+      {/* Top Bar: Brand & Quick Settings (Carefully positioned below iPhone notch/clock) */}
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 p-0.5 shadow-lg shadow-emerald-500/20">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Gamepad2 className="w-6 h-6 text-emerald-400" />
+              <Tv className="w-6 h-6 text-emerald-400" />
             </div>
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                Translate<span className="text-emerald-400">All</span>
+                Game<span className="text-emerald-400">Caption</span> AI
               </h1>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full flex items-center gap-1">
+              <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 NVIDIA NIM
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">
-              Konsol & TV Canlı Oyun Dublajı
+              Konsol & TV Canlı Oyun Çevirisi
             </p>
           </div>
         </div>
 
-        {/* Action icons */}
+        {/* Action icons (Large touch targets for iPhone) */}
         <div className="flex items-center gap-2">
           <button
             onClick={openHistory}
-            className="relative p-2.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white transition flex items-center gap-2 text-xs font-semibold"
+            className="p-3 sm:px-3 sm:py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-slate-200 active:scale-95 transition flex items-center gap-2 text-xs font-semibold cursor-pointer shadow-md min-h-[44px] min-w-[44px] justify-center"
             title="Geçmiş Çeviriler"
           >
-            <History className="w-4 h-4 text-emerald-400" />
+            <History className="w-5 h-5 text-emerald-400" />
             <span className="hidden sm:inline">Geçmiş</span>
             {historyCount > 0 && (
               <span className="bg-emerald-500 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
@@ -87,34 +86,34 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
           <button
             onClick={openSettings}
-            className="p-2.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white transition flex items-center gap-2 text-xs font-semibold"
+            className="p-3 sm:px-3 sm:py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-slate-200 active:scale-95 transition flex items-center gap-2 text-xs font-semibold cursor-pointer shadow-md min-h-[44px] min-w-[44px] justify-center"
             title="Ayarlar"
           >
-            <Settings className="w-4 h-4 text-slate-300" />
+            <Settings className="w-5 h-5 text-emerald-400" />
             <span className="hidden sm:inline">Ayarlar</span>
           </button>
         </div>
       </div>
 
       {/* Hero Quick Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/70 to-cyan-950/40 border border-emerald-500/20 p-4 sm:p-6 mb-6 backdrop-blur-md">
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/70 to-teal-950/40 border border-emerald-500/20 p-4 sm:p-5 mb-5 backdrop-blur-md">
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
               <Sparkles className="w-4 h-4 text-emerald-400" />
-              Oyun ve TV Çeviri Asistanı
+              GameCaption Deneyimi
             </div>
-            <p className="text-sm sm:text-base text-slate-200 font-medium">
-              Kamerayı ekrandaki altyazılara tutun; diyalogları algılayıp anında Türkçe olarak seslendirsin.
+            <p className="text-xs sm:text-sm text-slate-200 font-medium">
+              Kamerayı ekrandaki altyazı alanına tutun; yeşil kutu içindeki yabancı diyalogları anında Türkçe altyazı ve sesli dublajla dinleyin.
             </p>
           </div>
 
-          {/* Direct Dubbing Toggle */}
+          {/* Direct Dubbing Toggle Button */}
           <button
             onClick={onToggleTts}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2.5 transition-all shadow-md ${
+            className={`flex-shrink-0 px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2.5 transition-all shadow-md cursor-pointer active:scale-95 ${
               settings.enableTts
-                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/30'
+                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                 : 'bg-slate-800 border-white/10 text-slate-400 hover:bg-slate-700'
             }`}
           >
@@ -134,39 +133,39 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </div>
 
       {/* Main Choice Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        {/* Card 1: Camera & TV Game Translation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+        {/* Card 1: Camera & TV Game Translation (GameCaption style) */}
         <button
           onClick={onStartCamera}
-          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-950/90 border-2 border-emerald-500/40 hover:border-emerald-400 hover:shadow-2xl hover:shadow-emerald-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer"
+          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border-2 border-emerald-500/50 hover:border-emerald-400 hover:shadow-2xl hover:shadow-emerald-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition duration-500">
-            <Tv className="w-32 h-32 text-emerald-400" />
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-25 group-hover:scale-110 transition duration-500">
+            <Tv className="w-36 h-36 text-emerald-400" />
           </div>
 
           <div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition duration-300">
-              <Tv className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition duration-300">
+              <Tv className="w-7 h-7" />
             </div>
 
             <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg sm:text-xl font-bold text-white group-hover:text-emerald-300 transition">
-                Ekran & TV Çevirisi
+              <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-emerald-300 transition">
+                Kamera Modu
               </h2>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-500 text-slate-950">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500 text-slate-950">
                 Önerilen
               </span>
             </div>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-              Kamerayı konsola, TV'ye veya monitöre tutun. Altyazıları algılar, ekrana yazar ve <span className="text-emerald-400 font-semibold">otomatik Türkçe seslendirir</span>.
+              Kamerayı TV/monitöre çevirin. Yeşil kutuyu oyun altyazısına hizalayın; <span className="text-emerald-400 font-bold">canlı Türkçe altyazı ve sesli dublaj</span> alın.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-white/5 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition">
+          <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition">
             <span className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5" />
-              Canlı Kamerayı Başlat
+              <Zap className="w-4 h-4" />
+              Kamerayı Başlat
             </span>
             <ArrowRight className="w-4 h-4" />
           </div>
@@ -175,29 +174,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* Card 2: Voice Translation */}
         <button
           onClick={onStartVoice}
-          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-white/10 hover:border-cyan-400/60 hover:shadow-2xl hover:shadow-cyan-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer"
+          className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-slate-900/95 to-slate-950/95 border border-white/15 hover:border-teal-400/60 hover:shadow-2xl hover:shadow-teal-500/20 transition-all duration-300 text-left overflow-hidden cursor-pointer active:scale-[0.98]"
         >
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition duration-500">
-            <Mic className="w-32 h-32 text-cyan-400" />
+            <Mic className="w-36 h-36 text-teal-400" />
           </div>
 
           <div>
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition duration-300">
-              <Mic className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-4 group-hover:scale-110 transition duration-300">
+              <Mic className="w-7 h-7" />
             </div>
 
-            <h2 className="text-lg sm:text-xl font-bold text-white group-hover:text-cyan-300 transition mb-1">
-              Canlı Ses & Konuşma Çevirisi
+            <h2 className="text-xl sm:text-2xl font-black text-white group-hover:text-teal-300 transition mb-1">
+              Ses & Konuşma Modu
             </h2>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-              Oyun içi sesli sohbetleri, diyalogları veya videoları mikrofondan dinler; anında Türkçe'ye çevirip seslendirir.
+              Mikrofonu dinler, oyun içi yabancı diyalogları veya sesli sohbetleri anında Türkçe&apos;ye çevirip seslendirir.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-white/5 text-xs font-bold text-cyan-400 group-hover:translate-x-1 transition">
+          <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-bold text-teal-400 group-hover:translate-x-1 transition">
             <span className="flex items-center gap-1.5">
-              <Languages className="w-3.5 h-3.5" />
+              <Languages className="w-4 h-4" />
               Mikrofonu Başlat
             </span>
             <ArrowRight className="w-4 h-4" />
@@ -205,20 +204,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </button>
       </div>
 
-      {/* Screen Share Card (For PC / Laptop) */}
+      {/* Screen Share Card (PC / Desktop only) */}
       {isPc && (
-        <div className="mb-6">
+        <div className="mb-5">
           <button
             onClick={onStartScreenShare}
-            className="w-full flex items-center justify-between p-4 rounded-xl bg-slate-900/60 hover:bg-slate-800/80 border border-white/10 hover:border-white/20 transition text-left cursor-pointer"
+            className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-900/70 hover:bg-slate-800/90 border border-white/10 hover:border-white/20 transition text-left cursor-pointer active:scale-[0.99]"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-blue-500/20 text-blue-400">
+              <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400">
                 <Monitor className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-sm font-bold text-white flex items-center gap-2">
-                  PC Ekran Paylaşımı ile Çevir
+                <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                  PC Ekran Paylaşımı
                   <span className="text-[10px] text-slate-400 bg-white/10 px-2 py-0.5 rounded">Masaüstü</span>
                 </div>
                 <div className="text-xs text-slate-400">
@@ -231,15 +230,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       )}
 
-      {/* Last Translation Quick Glance */}
+      {/* Last Translation Quick Card */}
       {lastTranslation && (
-        <div className="rounded-xl bg-slate-900/60 border border-white/10 p-3.5 mb-6 flex items-center justify-between gap-3">
+        <div className="rounded-2xl bg-slate-900/80 border border-white/15 p-3.5 mb-5 flex items-center justify-between gap-3 shadow-lg">
           <div className="min-w-0 flex-1">
             <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1 mb-0.5">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               Son Çeviri
             </div>
-            <div className="text-xs font-semibold text-white truncate">
+            <div className="text-xs sm:text-sm font-bold text-white truncate">
               {lastTranslation.translatedText}
             </div>
             {lastTranslation.originalText && (
@@ -250,26 +249,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
           <button
             onClick={() => onSpeak(lastTranslation.translatedText)}
-            className="p-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition"
+            className="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition cursor-pointer active:scale-95"
             title="Sesli Dinle"
           >
-            <Volume2 className="w-4 h-4" />
+            <Volume2 className="w-5 h-5" />
           </button>
         </div>
       )}
 
-      {/* Bottom Info bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 pt-2 border-t border-white/5">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            Model: <strong>NVIDIA Nemotron 120B VL</strong>
-          </span>
-          <span>•</span>
-          <span>Hedef: <strong>Türkçe</strong></span>
+      {/* Footer System Info */}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500 pt-3 border-t border-white/5">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>GameCaption UI • NVIDIA NIM Nemotron VL</span>
         </div>
         <div>
-          TranslateAll v2.0 • Ultra Low Latency
+          Hedef Dil: <strong>Türkçe</strong>
         </div>
       </div>
     </div>

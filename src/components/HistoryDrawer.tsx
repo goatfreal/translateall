@@ -20,14 +20,14 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-md h-full bg-slate-950 border-l border-slate-800 shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm transition-opacity">
+      <div className="w-full max-w-md h-full bg-slate-950 border-l border-slate-800 shadow-2xl flex flex-col pt-12 pb-6">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-lime-400" />
-            <h3 className="font-bold text-white text-base">Diyalog Geçmişi</h3>
-            <span className="text-xs bg-slate-800 px-2 py-0.5 rounded-full text-slate-300">
+            <Clock className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-bold text-white text-base">Çeviri Geçmişi</h3>
+            <span className="text-xs bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 font-bold">
               {history.length}
             </span>
           </div>
@@ -36,14 +36,15 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
               <button
                 onClick={onClear}
                 title="Geçmişi Temizle"
-                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors"
+                className="p-2 text-slate-400 hover:text-rose-400 bg-slate-900 border border-white/10 rounded-xl transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-white bg-slate-900 border border-white/10 rounded-xl transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+              title="Kapat"
             >
               <X className="w-5 h-5" />
             </button>

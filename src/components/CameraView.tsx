@@ -3,13 +3,13 @@ import {
   Play,
   Pause,
   RefreshCw,
-  Crop,
   Zap,
   Volume2,
   VolumeX,
   AlertCircle,
   ArrowLeft,
   Radio,
+  SlidersHorizontal,
 } from 'lucide-react';
 import type { AppSettings, TranslationResult } from '../types';
 import { translateImageFrame } from '../services/nvidiaApi';
@@ -29,6 +29,8 @@ interface CameraViewProps {
   currentResult: TranslationResult | null;
 }
 
+type RoiPreset = 'bottom' | 'middle' | 'wide';
+
 export const CameraView: React.FC<CameraViewProps> = ({
   settings,
   onNewTranslation,
@@ -44,43 +46,38 @@ export const CameraView: React.FC<CameraViewProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [isLiveAuto, setIsLiveAuto] = useState<boolean>(true); // Default to live auto-scan
+  const [isLiveAuto, setIsLiveAuto] = useState<boolean>(true);
   const [isFrozen, setIsFrozen] = useState<boolean>(false);
-  const [showRoi, setShowRoi] = useState<boolean>(settings.roiEnabled);
   const [hasCameraError, setHasCameraError] = useState<string | null>(null);
   const [isSpeakingNow, setIsSpeakingNow] = useState<boolean>(false);
+  const [roiPreset, setRoiPreset] = useState<RoiPreset>('bottom');
   const lastFrameHashRef = useRef<string>('');
 
-  // Audio unlock helper for iOS WebKit
+  // Unlock iOS audio context on any touch
   const handleTouchUnlock = () => {
     voiceManager.unlockAudio();
   };
 
-  // List available video input devices
-  const updateDeviceList = useCallback(async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-      const deviceList = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = deviceList.filter((d) => d.kind === 'videoinput');
-      setDevices(videoInputs);
-      if (videoInputs.length > 0 && !selectedDeviceId) {
-        const backOrUsb =
-          videoInputs.find((d) =>
-            /back|rear|arka|usb|capture|cam link|hdmi/i.test(d.label)
-          ) || videoInputs[0];
-        setSelectedDeviceId(backOrUsb.deviceId);
-      }
-    } catch (e: any) {
-      console.warn('Cihaz listesi alınamadı:', e);
+  // ROI Preset Configurations (GameCaption Style)
+  const getRoiBox = (preset: RoiPreset) => {
+    switch (preset) {
+      case 'middle':
+        return { x: 8, y: 38, width: 84, height: 26 }; // RPG Dialogue choices
+      case 'wide':
+        return { x: 5, y: 25, width: 90, height: 50 }; // Menu, Quest, Inventory
+      case 'bottom':
+      default:
+        return { x: 6, y: 68, width: 88, height: 24 }; // Standard TV game subtitle area
     }
-  }, [selectedDeviceId]);
+  };
 
-  // Start video stream from camera
+  const activeRoi = getRoiBox(roiPreset);
+
+  // Start video stream
   const startCamera = useCallback(async () => {
     try {
       setHasCameraError(null);
@@ -98,9 +95,11 @@ export const CameraView: React.FC<CameraViewProps> = ({
       }
 
       const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId
-          ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-          : { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       };
 
@@ -111,8 +110,6 @@ export const CameraView: React.FC<CameraViewProps> = ({
         videoRef.current.srcObject = newStream;
         await videoRef.current.play();
       }
-
-      await updateDeviceList();
     } catch (err: any) {
       console.error('Kamera açma hatası:', err);
       let errMsg = 'Kamera başlatılamadı. Lütfen kamera izinlerini kontrol edin.';
@@ -124,7 +121,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
       setHasCameraError(errMsg);
       onError(errMsg);
     }
-  }, [facingMode, selectedDeviceId, screenStream, onError, updateDeviceList]);
+  }, [facingMode, screenStream, onError]);
 
   useEffect(() => {
     startCamera();
@@ -135,7 +132,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     };
   }, [startCamera]);
 
-  // Quick 8x8 luminance hash for frame diff checking
+  // Frame luminance hash to skip duplicate API calls when game dialogue is static
   const computeQuickHash = (ctx: CanvasRenderingContext2D, width: number, height: number): string => {
     try {
       const stepX = Math.max(1, Math.floor(width / 8));
@@ -155,7 +152,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     }
   };
 
-  // Capture current video frame as ultra-fast compressed JPEG
+  // Capture frame strictly inside the GameCaption Green Box
   const captureFrame = useCallback((checkDiff: boolean = false): { base64: string; changed: boolean } | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -166,32 +163,22 @@ export const CameraView: React.FC<CameraViewProps> = ({
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    let targetW = 640;
-    let targetH = 360;
+    // Crop strictly inside active ROI box
+    const rx = Math.round((activeRoi.x / 100) * vw);
+    const ry = Math.round((activeRoi.y / 100) * vh);
+    const rw = Math.round((activeRoi.width / 100) * vw);
+    const rh = Math.round((activeRoi.height / 100) * vh);
 
+    const targetW = Math.min(540, rw);
+    const targetH = Math.round((targetW * rh) / rw);
+
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
 
-    if (showRoi) {
-      // Focus strictly on the subtitle area (massive speed boost, ~25KB payload)
-      const rx = (settings.roiBox.x / 100) * vw;
-      const ry = (settings.roiBox.y / 100) * vh;
-      const rw = (settings.roiBox.width / 100) * vw;
-      const rh = (settings.roiBox.height / 100) * vh;
-
-      targetW = Math.min(640, Math.round(rw));
-      targetH = Math.round((targetW * rh) / rw);
-
-      canvas.width = targetW;
-      canvas.height = targetH;
-      ctx.drawImage(video, rx, ry, rw, rh, 0, 0, targetW, targetH);
-    } else {
-      targetW = 640;
-      targetH = Math.round((640 * vh) / vw);
-      canvas.width = targetW;
-      canvas.height = targetH;
-      ctx.drawImage(video, 0, 0, targetW, targetH);
-    }
+    // Draw strictly the green target box contents
+    ctx.drawImage(video, rx, ry, rw, rh, 0, 0, targetW, targetH);
 
     let changed = true;
     if (checkDiff) {
@@ -203,11 +190,11 @@ export const CameraView: React.FC<CameraViewProps> = ({
       }
     }
 
-    const base64 = canvas.toDataURL('image/jpeg', 0.68);
+    const base64 = canvas.toDataURL('image/jpeg', 0.72);
     return { base64, changed };
-  }, [showRoi, settings.roiBox]);
+  }, [activeRoi]);
 
-  // Perform translation & automatic TTS audio dubbing
+  // Translate and Auto-Dub
   const handleTranslateCurrentFrame = useCallback(async (isAutoScan: boolean = false) => {
     if (isTranslating) return;
 
@@ -219,7 +206,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
     const captureResult = captureFrame(isAutoScan);
     if (!captureResult) return;
 
-    // Skip if subtitle unchanged in auto-scan mode
+    // Skip if in-game subtitle didn't change
     if (isAutoScan && !captureResult.changed) {
       return;
     }
@@ -237,7 +224,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
       if (result && result.translatedText) {
         onNewTranslation(result);
 
-        // SESLİ DUBLAJ: Ekrandaki çeviriyi anında seslendir
+        // GameCaption Auto-Dubbing: Speak Turkish dialogue aloud immediately
         if (settings.enableTts) {
           setIsSpeakingNow(true);
           onSpeak(result.translatedText);
@@ -278,14 +265,13 @@ export const CameraView: React.FC<CameraViewProps> = ({
     return () => clearInterval(interval);
   }, [isLiveAuto, isFrozen, isTranslating, settings.autoIntervalSeconds, handleTranslateCurrentFrame]);
 
-  // Toggle Facing Mode
+  // Toggle Camera
   const toggleFacingMode = () => {
     handleTouchUnlock();
-    setSelectedDeviceId('');
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Toggle freeze frame
+  // Toggle Freeze Frame
   const toggleFreeze = () => {
     handleTouchUnlock();
     const video = videoRef.current;
@@ -303,38 +289,39 @@ export const CameraView: React.FC<CameraViewProps> = ({
 
   return (
     <div
+      ref={containerRef}
       onClick={handleTouchUnlock}
-      className="relative w-full h-full flex flex-col items-center justify-between bg-black overflow-hidden rounded-3xl border border-slate-800 shadow-2xl select-none"
+      className="relative w-full h-[92vh] max-h-[92vh] flex flex-col items-center justify-between bg-black overflow-hidden rounded-3xl border border-slate-800 shadow-2xl select-none"
     >
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* TOP HEADER HUD */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-b from-slate-950/95 via-slate-950/70 to-transparent flex items-center justify-between gap-2 backdrop-blur-sm">
-        {/* Back to Menu Button */}
+      {/* TOP BAR (SAFE AREA PADDED FOR IPHONE CLOCK & NOTCH) */}
+      <div className="absolute top-0 left-0 right-0 z-30 px-3 sm:px-4 pt-12 pb-3 bg-gradient-to-b from-slate-950 via-slate-950/80 to-transparent flex items-center justify-between gap-2 backdrop-blur-sm">
+        {/* Back Button */}
         <button
           onClick={onBackToMenu}
-          className="px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition"
+          className="px-3.5 py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4 text-emerald-400" />
           <span>Menü</span>
         </button>
 
-        {/* Center Live Status */}
-        <div className="flex items-center gap-2">
+        {/* Center Live Badge */}
+        <div className="flex items-center gap-1.5">
           {isTranslating ? (
-            <div className="px-3 py-1.5 bg-emerald-500 text-slate-950 text-xs font-black rounded-full flex items-center gap-1.5 shadow-lg shadow-emerald-500/30 animate-pulse">
+            <div className="px-3 py-1.5 bg-emerald-500 text-slate-950 text-xs font-black rounded-full flex items-center gap-1.5 shadow-lg shadow-emerald-500/40 animate-pulse">
               <Zap className="w-3.5 h-3.5 fill-current" />
-              <span>ÇEVRİLİYOR...</span>
+              <span>ÇEVRİLİYOR</span>
             </div>
           ) : (
-            <div className="px-3 py-1.5 bg-black/70 border border-white/10 rounded-full text-xs font-semibold text-slate-300 flex items-center gap-1.5 backdrop-blur-md">
+            <div className="px-3 py-1.5 bg-black/80 border border-white/15 rounded-full text-[11px] font-bold text-slate-200 flex items-center gap-1.5 backdrop-blur-md">
               <span className={`w-2 h-2 rounded-full ${isLiveAuto ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <span>{isLiveAuto ? 'CANLI TARAMA' : 'DURAKLATILDI'}</span>
             </div>
           )}
         </div>
 
-        {/* Top Right Controls */}
+        {/* Right Controls */}
         <div className="flex items-center gap-2">
           {/* TTS Dubbing Toggle Button */}
           <button
@@ -342,27 +329,37 @@ export const CameraView: React.FC<CameraViewProps> = ({
               handleTouchUnlock();
               onToggleTts();
             }}
-            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
+            className={`px-3 py-2 rounded-2xl border text-xs font-black flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer min-h-[44px] ${
               settings.enableTts
-                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 shadow-emerald-500/20'
-                : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+                ? 'bg-emerald-500/30 border-emerald-400 text-emerald-300 shadow-emerald-500/20'
+                : 'bg-slate-900/90 border-white/15 text-slate-400 hover:text-white'
             }`}
             title="Sesli Dublajı Aç/Kapat"
           >
             {settings.enableTts ? (
               <>
                 <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">Dublaj: AÇIK</span>
+                <span>Dublaj: AÇIK</span>
               </>
             ) : (
               <>
                 <VolumeX className="w-4 h-4 text-slate-400" />
-                <span className="hidden sm:inline">Dublaj: KAPALI</span>
+                <span>Dublaj: KAPALI</span>
               </>
             )}
           </button>
 
-          {/* Clear PC Screen Share Button */}
+          {/* Camera Flip */}
+          {!screenStream && (
+            <button
+              onClick={toggleFacingMode}
+              className="p-2.5 rounded-2xl bg-slate-900/90 border border-white/15 text-slate-300 hover:text-white active:scale-95 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+              title="Kamera Değiştir (Ön/Arka)"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+
           {screenStream && (
             <button
               onClick={onClearScreenStream}
@@ -371,43 +368,59 @@ export const CameraView: React.FC<CameraViewProps> = ({
               Ekranı Kapat
             </button>
           )}
-
-          {/* Device Selector */}
-          {devices.length > 1 && !screenStream && (
-            <select
-              value={selectedDeviceId}
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="bg-slate-900 border border-white/10 text-slate-300 text-xs rounded-xl px-2 py-1 outline-none hidden md:inline-block"
-            >
-              {devices.map((d, idx) => (
-                <option key={d.deviceId || idx} value={d.deviceId}>
-                  {d.label || `Kamera ${idx + 1}`}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Camera Flip */}
-          {!screenStream && (
-            <button
-              onClick={toggleFacingMode}
-              className="p-2 rounded-xl bg-slate-900/80 border border-white/15 text-slate-300 hover:text-white active:scale-95 transition cursor-pointer"
-              title="Kamera Değiştir (Ön/Arka)"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* CAMERA VIDEO VIEWPORT */}
-      <div className="relative w-full flex-1 flex items-center justify-center min-h-[300px] overflow-hidden">
+      {/* GAMECAPTION LIVE FLOATING SUBTITLE BANNER (TOP OVERLAY) */}
+      {currentResult && currentResult.translatedText && (
+        <div className="absolute top-24 left-3 right-3 z-30 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="rounded-2xl bg-black/95 border-2 border-emerald-400 shadow-[0_10px_35px_rgba(0,0,0,0.9)] p-3.5 backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-2 mb-1 pb-1 border-b border-white/10 text-[11px]">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-black">
+                {isSpeakingNow ? (
+                  <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span>{isSpeakingNow ? 'Seslendiriliyor...' : 'Türkçe Altyazı'}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-[10px]">⚡ {currentResult.latencyMs}ms</span>
+                <button
+                  onClick={() => {
+                    handleTouchUnlock();
+                    onSpeak(currentResult.translatedText);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-black text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Volume2 className="w-3 h-3" /> Tekrar Oku
+                </button>
+              </div>
+            </div>
+
+            {/* Subtitle High-Contrast Golden / White Text */}
+            <div className="text-amber-300 font-black text-base sm:text-xl leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">
+              {currentResult.translatedText}
+            </div>
+
+            {currentResult.originalText && (
+              <div className="text-slate-400 text-xs mt-1 italic font-medium truncate">
+                {currentResult.originalText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* VIDEO VIEWPORT WITH GAMECAPTION GREEN TARGET FRAME */}
+      <div className="relative w-full flex-1 flex items-center justify-center min-h-[360px] overflow-hidden">
         <video
           ref={videoRef}
           playsInline
           autoPlay
           muted
-          className={`w-full h-full object-contain ${
+          className={`w-full h-full object-cover ${
             facingMode === 'user' && !screenStream ? 'scale-x-[-1]' : ''
           }`}
         />
@@ -427,113 +440,110 @@ export const CameraView: React.FC<CameraViewProps> = ({
           </div>
         )}
 
-        {/* SUBTITLE FOCUS BOX (ROI) */}
-        {showRoi && (
-          <div
-            className="absolute border-2 border-dashed border-emerald-400/70 bg-emerald-400/5 pointer-events-none rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all"
-            style={{
-              left: `${settings.roiBox.x}%`,
-              top: `${settings.roiBox.y}%`,
-              width: `${settings.roiBox.width}%`,
-              height: `${settings.roiBox.height}%`,
-            }}
-          >
-            <div className="absolute -top-5 left-2 bg-emerald-500 text-slate-950 px-2 py-0.5 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1 shadow">
-              <Crop className="w-2.5 h-2.5" /> Altyazıyı Bu Alana Denk Getirin
-            </div>
-          </div>
-        )}
-      </div>
+        {/* GAMECAPTION GREEN SUBTITLE TARGET BOX (YEŞİL ALTYAZI KUTUSU) */}
+        <div
+          className="absolute border-2 border-emerald-400 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.35)] pointer-events-none transition-all duration-300"
+          style={{
+            left: `${activeRoi.x}%`,
+            top: `${activeRoi.y}%`,
+            width: `${activeRoi.width}%`,
+            height: `${activeRoi.height}%`,
+          }}
+        >
+          {/* Corner Brackets (GameCaption Design) */}
+          <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-emerald-300 rounded-tl" />
+          <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-emerald-300 rounded-tr" />
+          <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-emerald-300 rounded-bl" />
+          <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-emerald-300 rounded-br" />
 
-      {/* INTEGRATED SUBTITLE DISPLAY HUD */}
-      {currentResult && currentResult.translatedText && (
-        <div className="w-full px-3 py-2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="max-w-3xl mx-auto rounded-2xl bg-slate-950/95 border-2 border-emerald-500/50 shadow-2xl p-3.5 backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/10 text-[11px]">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                {isSpeakingNow ? (
-                  <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                )}
-                <span>{isSpeakingNow ? 'Seslendiriliyor...' : 'Türkçe Altyazı'}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-[10px]">
-                  ⚡ {currentResult.latencyMs}ms
-                </span>
-                <button
-                  onClick={() => {
-                    handleTouchUnlock();
-                    onSpeak(currentResult.translatedText);
-                  }}
-                  className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[10px] flex items-center gap-1"
-                >
-                  <Volume2 className="w-3 h-3" /> Tekrar Dinle
-                </button>
-              </div>
-            </div>
-
-            {/* Main Translated Subtitle Text */}
-            <div className="text-white font-extrabold text-base sm:text-xl leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-              {currentResult.translatedText}
-            </div>
-
-            {/* Original Text if available */}
-            {currentResult.originalText && (
-              <div className="text-slate-400 text-xs mt-1 italic font-medium truncate">
-                {currentResult.originalText}
-              </div>
-            )}
+          {/* Subtitle Alignment Guide Label */}
+          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 px-3 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1 whitespace-nowrap">
+            <span>🎯 Oyun Altyazısını Bu Yeşil Kutunun İçine Hizalayın</span>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* STREAMLINED BOTTOM CONTROLS */}
-      <div className="w-full bg-slate-950/95 p-3 sm:p-4 z-20 flex items-center justify-between gap-3 border-t border-slate-900 backdrop-blur-md">
-        {/* Left: ROI Toggle */}
-        <button
-          onClick={() => {
-            handleTouchUnlock();
-            setShowRoi(!showRoi);
-          }}
-          className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
-            showRoi
-              ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300'
-              : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
-          }`}
-          title="Altyazı Çerçevesi"
-        >
-          <Crop className="w-4 h-4" />
-          <span className="hidden sm:inline">Odak Çerçevesi</span>
-        </button>
+      {/* GAMECAPTION PRESET SELECTOR & BOTTOM CONTROLS */}
+      <div className="w-full bg-slate-950/95 pt-2 pb-6 px-3 sm:px-4 z-20 flex flex-col gap-2.5 border-t border-slate-900 backdrop-blur-md safe-bottom">
+        {/* Preset Selector Buttons: Alt Altyazı | Orta Diyalog | Geniş Alan */}
+        <div className="flex items-center justify-center gap-1.5 w-full">
+          <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1 mr-1">
+            <SlidersHorizontal className="w-3 h-3 text-emerald-400" /> Kutu:
+          </span>
 
-        {/* Center: BIG SNAP & TRANSLATE BUTTON */}
-        <button
-          onClick={() => {
-            handleTouchUnlock();
-            handleTranslateCurrentFrame(false);
-          }}
-          disabled={isTranslating}
-          className={`flex-1 max-w-xs py-3 px-4 rounded-2xl font-black text-sm tracking-wide flex items-center justify-center gap-2 shadow-xl transition-all ${
-            isTranslating
-              ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/25 active:scale-95 cursor-pointer'
-          }`}
-        >
-          <Zap className="w-4 h-4 fill-current" />
-          <span>{isTranslating ? 'ÇEVRİLİYOR...' : 'ŞİMDİ ÇEVİR & DUBLAJ'}</span>
-        </button>
+          <button
+            onClick={() => setRoiPreset('bottom')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+              roiPreset === 'bottom'
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900 border border-white/10 text-slate-300 hover:text-white'
+            }`}
+          >
+            Alt Altyazı
+          </button>
 
-        {/* Right: Live Auto-Scan Toggle & Freeze */}
-        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setRoiPreset('middle')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+              roiPreset === 'middle'
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900 border border-white/10 text-slate-300 hover:text-white'
+            }`}
+          >
+            Orta Diyalog
+          </button>
+
+          <button
+            onClick={() => setRoiPreset('wide')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+              roiPreset === 'wide'
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900 border border-white/10 text-slate-300 hover:text-white'
+            }`}
+          >
+            Geniş Menü
+          </button>
+        </div>
+
+        {/* Action Buttons: Snap Translate & Live Auto Toggle */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Freeze Frame Button */}
+          <button
+            onClick={toggleFreeze}
+            className={`p-3 rounded-2xl border text-xs transition cursor-pointer min-h-[48px] min-w-[48px] flex items-center justify-center ${
+              isFrozen
+                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+            }`}
+            title={isFrozen ? 'Yayını Devam Ettir' : 'Kareyi Dondur ve Oku'}
+          >
+            {isFrozen ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+          </button>
+
+          {/* Big GameCaption SNAP & TRANSLATE Button */}
+          <button
+            onClick={() => {
+              handleTouchUnlock();
+              handleTranslateCurrentFrame(false);
+            }}
+            disabled={isTranslating}
+            className={`flex-1 py-3.5 px-4 rounded-2xl font-black text-sm sm:text-base tracking-wide flex items-center justify-center gap-2 shadow-xl transition-all min-h-[48px] ${
+              isTranslating
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30 active:scale-95 cursor-pointer'
+            }`}
+          >
+            <Zap className="w-5 h-5 fill-current" />
+            <span>{isTranslating ? 'ÇEVRİLİYOR...' : 'ŞİMDİ ÇEVİR & DUBLAJ'}</span>
+          </button>
+
+          {/* Live Auto-Scan Toggle */}
           <button
             onClick={() => {
               handleTouchUnlock();
               setIsLiveAuto(!isLiveAuto);
             }}
-            className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-3.5 py-3 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer min-h-[48px] ${
               isLiveAuto
                 ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-md shadow-rose-500/10'
                 : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
@@ -541,21 +551,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
             title="Canlı Otomatik Tarama"
           >
             {isLiveAuto ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            <span className="hidden sm:inline">
-              {isLiveAuto ? 'Oto-Durdur' : 'Oto-Başlat'}
-            </span>
-          </button>
-
-          <button
-            onClick={toggleFreeze}
-            className={`p-2.5 rounded-xl border text-xs transition cursor-pointer ${
-              isFrozen
-                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
-            }`}
-            title={isFrozen ? 'Yayını Sürdür' : 'Ekranı Dondur & Oku'}
-          >
-            {isFrozen ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isLiveAuto ? 'Durdur' : 'Canlı Tara'}</span>
           </button>
         </div>
       </div>

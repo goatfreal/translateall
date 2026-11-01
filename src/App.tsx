@@ -229,7 +229,7 @@ export function App() {
         )}
 
         {activeTab === 'camera' && (
-          <div className="flex-1 flex flex-col w-full h-full p-2 sm:p-4 max-w-6xl mx-auto">
+          <div className="flex-1 flex flex-col w-full h-full p-0 sm:p-4 max-w-6xl mx-auto">
             <CameraView
               settings={settings}
               onNewTranslation={handleNewTranslation}
@@ -247,7 +247,7 @@ export function App() {
         )}
 
         {activeTab === 'voice' && (
-          <div className="flex-1 flex flex-col w-full h-full p-2 sm:p-4 max-w-4xl mx-auto">
+          <div className="flex-1 flex flex-col w-full h-full p-3 sm:p-4 max-w-4xl mx-auto safe-header safe-bottom">
             <VoiceView
               settings={settings}
               onNewTranslation={handleNewTranslation}
